@@ -806,6 +806,20 @@ function assessDefensiveResponse(bot, target, scene, operation = null) {
     const eligible = eligibleDefensiveTarget(bot,target,scene,attached.entity,operation||{mode:"security"},combatContext);
     const operationRuntime = require("./playerBotOperationRuntime");
     const roleFitReady = operationRuntime.hasRoleShipFit(bot, role);
+    // [ENGAGEMENT-SEAM:D] BEGIN
+    if (activeCombat) {
+      const playerTarget = operation.mode === "piracy" && bot.wildfire === true &&
+        target.kind === "ship" && target.session && !require("./playerBotCapacityRuntime").isPlayerBotSession(target.session);
+      try {
+        const engagement = require("./playerBotEngagementRuntime");
+        if (engagement.handles("D", operation, bot, playerTarget)) {
+          const verdict = engagement.runSeamD({ bot, operation, attached, target, state, fit,
+            drones, eligible, roleFitReady, playerTarget });
+          if (verdict) return verdict;
+        }
+      } catch (_) { /* An unavailable module leaves the defensive authority below in control. */ }
+    }
+    // [ENGAGEMENT-SEAM:D] END
     const fitting = require("../fitting/liveFittingState");
     const mass = (typeID) => Number(fitting.getTypeAttributeValue(Number(typeID), "mass")) || 0;
     return combatDecision.decideDefensiveResponse({
@@ -1393,6 +1407,30 @@ async function advanceCombat(operation, bot, kit) {
       withdrawRequested: operation.withdrawRequested === true,
       withdrawReason: operation.withdrawReason,
     });
+    // [ENGAGEMENT-SEAM:C] BEGIN
+    let committedRuntime;
+    let launchRuntime;
+    if (["war", "nullsec-conflict", "piracy"].includes(operation.mode) &&
+        !operation.siteInstanceID && !operation.miningEscortGroupKey) {
+      try {
+        const engagement = require("./playerBotEngagementRuntime");
+        if ((operation.mode !== "piracy" || bot.wildfire === true) && engagement.handles("A", operation, bot)) {
+          launchRuntime = engagement;
+        }
+        const target = scene.getEntityByID(Number(operation.defensiveTargetID || operation.targetID));
+        const playerTarget = operation.mode === "piracy" && bot.wildfire === true &&
+          target?.kind === "ship" && target.session && !require("./playerBotCapacityRuntime").isPlayerBotSession(target.session);
+        if (engagement.handles("C", operation, bot, playerTarget)) {
+          const verdict = engagement.runSeamC({ bot, operation, attached, target, state, fit,
+            drones, playerTarget, hostSafety: safety });
+          if (verdict) {
+            safety = verdict;
+            committedRuntime = engagement;
+          }
+        }
+      } catch (_) { /* Keep the original safety decision. */ }
+    }
+    // [ENGAGEMENT-SEAM:C] END
     if (!operation.withdrawRequested && operation.stage !== "site-loot" &&
         require("./playerBotDefenseAssessment").enabled(scene.systemID)) {
       const currentTarget = scene.getEntityByID(Number(operation.defensiveTargetID || operation.targetID));
@@ -1666,6 +1704,7 @@ async function advanceCombat(operation, bot, kit) {
       return { delayMs: 10_000 };
     }
 
+    let continuingTarget = null;
     if (operation.targetID) {
       const target = scene.getEntityByID(Number(operation.targetID));
       if (!target) {
@@ -1712,34 +1751,52 @@ async function advanceCombat(operation, bot, kit) {
         return { delayMs: 15_000 };
       }
       const assigned = drones.some((drone) => Number(drone.targetID) === Number(target.itemID));
-      if (assigned) return { delayMs: 15_000 };
-      operation.targetID = null;
-      kit.save(operation);
+      // [ENGAGEMENT-SEAM:A] Keep the revalidated target for maneuver/cadence.
+      if (assigned) {
+        if (!committedRuntime) return { delayMs: 15_000 };
+        continuingTarget = target;
+      } else {
+        operation.targetID = null;
+        kit.save(operation);
+      }
     }
 
-    let currentDrones = getControlledDrones(scene, entity.itemID);
-    if (!currentDrones.length) {
+    let currentDrones = continuingTarget ? drones : getControlledDrones(scene, entity.itemID);
+    function preparePatrolFlight() {
+      if (currentDrones.length) return true;
       const launched = launchDrones(bot, session, scene, entity.itemID, operation.combatDroneTypeID);
       if (!launched.success) {
         operation.stage = "return";
         record(operation, kit, `${launched.message} The combat patrol is returning to station.`);
-        return { delayMs: 15_000 };
+        return false;
       }
       currentDrones = launched.drones;
       record(operation, kit, `Launched ${currentDrones.length} combat drone(s) through the drone service.`);
+      return true;
     }
+    if (!launchRuntime && !preparePatrolFlight()) return { delayMs: 15_000 };
 
-    const targets = operation.siteInstanceID
+    const targets = continuingTarget ? null : operation.siteInstanceID
       ? listSiteEntities(scene, operation.siteInstanceID)
       : operation.miningEscortGroupKey && typeof scene.getVisibleEntitiesForSession === "function"
         ? scene.getVisibleEntitiesForSession(session)
         : [...(scene.dynamicEntities instanceof Map ? scene.dynamicEntities.values() : [])];
-    const target = combatPolicy.selectCombatTarget(
+    const target = continuingTarget || combatPolicy.selectCombatTarget(
       targets,
       operation.mode,
       getCombatContext(bot, scene, entity, operation),
     );
-    const activeTarget = defensiveTarget || target;
+    const activeTarget = continuingTarget || defensiveTarget || target;
+    // [ENGAGEMENT-SEAM:A] Decide whether this patrol will warp before launching.
+    // A flight released before a cross-grid warp would lose its controller.
+    const isWildfirePlayer = launchRuntime && operation.mode === "piracy" && bot.wildfire === true &&
+      activeTarget?.kind === "ship" && activeTarget.session &&
+      !require("./playerBotCapacityRuntime").isPlayerBotSession(activeTarget.session);
+    const committed = !operation.miningEscortGroupKey &&
+      (operation.mode === "war" || operation.mode === "nullsec-conflict" || isWildfirePlayer);
+    const pursuitDistance = launchRuntime && committed && activeTarget ? state.distanceTo(activeTarget.itemID) : undefined;
+    if (launchRuntime && (!committed || (Number.isFinite(pursuitDistance) && !state.busy &&
+        !launchRuntime.requiresPursuitWarp(pursuitDistance))) && !preparePatrolFlight()) return { delayMs: 15_000 };
     if (!activeTarget) {
       if (operation.siteInstanceID) {
         if (!siteInstance) {
@@ -1825,13 +1882,10 @@ async function advanceCombat(operation, bot, kit) {
     if (engagement) {
       const targetID = Number(activeTarget.itemID);
       const isDefensive = Number(operation.defensiveTargetID) === targetID;
-      const isWildfirePlayer = operation.mode === "piracy" && bot.wildfire === true &&
-        activeTarget.kind === "ship" && activeTarget.session &&
-        !require("./playerBotCapacityRuntime").isPlayerBotSession(activeTarget.session);
-      const committed = operation.mode === "war" || operation.mode === "nullsec-conflict" || isWildfirePlayer;
       const result = engagement.runSeamA({
-        bot, operation, attached, state, fit, space, drones: currentDrones, target: activeTarget,
+        bot, operation, attached, state, fit, space, drones: currentDrones, target: activeTarget, distance: pursuitDistance,
         stance: committed ? "committed" : "cautious", lock: false,
+        checkEntry: committed && !continuingTarget && !require("./playerBotDefenseAssessment").enabled(scene.systemID),
         rangePolicy: committed || isDefensive ? "control" : "legacy",
         cadence: { closingMs: 15_000, engagedMs: isDefensive ? 1_000 : 15_000 },
         beforeEngage() {
@@ -1845,6 +1899,14 @@ async function advanceCombat(operation, bot, kit) {
         },
       });
       if (result) {
+        if (result.status === "withdraw") {
+          operation.stage = "return";
+          operation.emergencyRetreat = Number(state.warpScrambleStatus) > 0;
+          if (!operation.emergencyRetreat && currentDrones.length) require("../drone/droneRuntime").commandReturnBay(
+            session, currentDrones.map((drone) => Number(drone.itemID)));
+          record(operation, kit, `Withdrawing before engagement with ${targetID}: ${result.reason}.`);
+          return { delayMs: 1_000 };
+        }
         if (result.status === "refused" && result.reason === "approach-failed") {
           return kit.block(operation, "holding", result.detail);
         }
@@ -1883,6 +1945,8 @@ async function advanceCombat(operation, bot, kit) {
         return { delayMs: result.delayMs };
       }
     }
+    if (continuingTarget) return { delayMs: 15_000 };
+    if (launchRuntime && !preparePatrolFlight()) return { delayMs: 15_000 };
     // [ENGAGEMENT-SEAM:A] END
     const targetDistance = state.distanceTo(activeTarget.itemID) ?? Number.POSITIVE_INFINITY;
     const effectiveDroneRange = Math.max(1_000, Math.min(

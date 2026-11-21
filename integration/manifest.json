@@ -310,8 +310,8 @@
     },
     "server/src/services/playerbots/playerBotCombatRuntime.js": {
       "baseSha256": null,
-      "sourceSha256": "7ac71253b9928059e60706f5b73de9eeb8f6a1583728d5011619630db866fb4e",
-      "overlaySha256": "7ac71253b9928059e60706f5b73de9eeb8f6a1583728d5011619630db866fb4e",
+      "sourceSha256": "20bfa5d56eb098e831c1deb4f0b7242426b636b38ddfad6cd5abe374653fd684",
+      "overlaySha256": "20bfa5d56eb098e831c1deb4f0b7242426b636b38ddfad6cd5abe374653fd684",
       "subsystem": "playerbots-core"
     },
     "server/src/services/playerbots/playerBotConfigurationRuntime.js": {
@@ -380,10 +380,22 @@
       "overlaySha256": "3b5ea672e252b48f07e425f5accb7a8e5ed2a9db55c639f60c54aae49786fd53",
       "subsystem": "playerbots-core"
     },
+    "server/src/services/playerbots/playerBotEngagementPolicy.js": {
+      "baseSha256": null,
+      "sourceSha256": "6bb31ad0f454f5f79dce3334902ce1099d71146a45c00ac381b3ea3805ed74a3",
+      "overlaySha256": "6bb31ad0f454f5f79dce3334902ce1099d71146a45c00ac381b3ea3805ed74a3",
+      "subsystem": "playerbots-core"
+    },
+    "server/src/services/playerbots/playerBotEngagementProfile.js": {
+      "baseSha256": null,
+      "sourceSha256": "b883bdcda1fb74c1d3dcff266a98a8b4d932549f297aaa488a8854637484fa6e",
+      "overlaySha256": "b883bdcda1fb74c1d3dcff266a98a8b4d932549f297aaa488a8854637484fa6e",
+      "subsystem": "playerbots-core"
+    },
     "server/src/services/playerbots/playerBotEngagementRuntime.js": {
       "baseSha256": null,
-      "sourceSha256": "c887293f6c8b120a1814d75f860552b7428463ef7e3cbe909a1e52c7eacfdd00",
-      "overlaySha256": "c887293f6c8b120a1814d75f860552b7428463ef7e3cbe909a1e52c7eacfdd00",
+      "sourceSha256": "974c7f4dd8987424caa4e81bfaee7ecc30f823601185abcf33d5c809550c4ad8",
+      "overlaySha256": "974c7f4dd8987424caa4e81bfaee7ecc30f823601185abcf33d5c809550c4ad8",
       "subsystem": "playerbots-core"
     },
     "server/src/services/playerbots/playerBotFitPlanner.js": {
@@ -804,7 +816,7 @@
     "addons/playerbots/README.md": "f908ca78eb94ec402f54d274f9f6b7bc462c99c2e8fa052f359789e59bc8b3ef",
     "addons/playerbots/THIRD_PARTY_NOTICES.md": "4e53a2b31f3965241b9d182b7764420e4f121213267ebc3936682544204c34dc",
     "addons/playerbots/TROUBLESHOOTING.md": "ef762f9fe30903742633449ffdd48c2bc48fe85cab2fd0b695548fea01f71279",
-    "addons/playerbots/compose.override.yaml": "087b318e781eb2fb46e5cc39059e4f34692507fa717c275ffe8c02861216b0e1",
+    "addons/playerbots/compose.override.yaml": "879dfb2e79293bf5ffe817499d24b88a37de88be6a33887357968ba3af6886e2",
     "addons/playerbots/dashboard/app.js": "bf1468f85969efb7ec789db4b58e5eeb652ef0d4b6e79a5455ce28479d7e66af",
     "addons/playerbots/dashboard/favicon.svg": "b253bad68ca8a9fbff82054eeb86dc5084ca42c3f3168144b6866a81da7c3159",
     "addons/playerbots/dashboard/index.html": "ecf975b5526381e973cb404acabf9aa50fd8dfa844eee8a8a6e19fd9123e0519",
