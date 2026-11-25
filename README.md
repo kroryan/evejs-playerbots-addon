@@ -106,9 +106,11 @@ random emblems, or names from your own name library.
 work every few minutes, a limited number at a time so the server stays
 responsive. Work is saved as it goes and resumes after a restart.
 
+- **Fleets:** bot corporations form their own mining, combat and escort
+  fleets; the commander waits for its pilots at every undock and gate.
 - **Home base:** pilots live around their corporation's Upwell headquarters,
   fly home between jobs when they stray beyond 5 jumps, and mine and rat
-  near it.
+  near it, in low- and null-sec too when the risk tolerance allows.
 - **Mining:** belt mining, refining and selling, or delivery to the
   corporation's headquarters, with security escorts when rats are about.
 - **Industry:** manufacturing paid from a personal or corporation wallet,
@@ -118,16 +120,19 @@ responsive. Work is saved as it goes and resumes after a restart.
 - **Trade:** buying and selling, standing buy and sell rules, courier
   contracts, and mineral buy orders that give hubs outside Jita a real
   market.
-- **Alliances:** corporations ally against shared enemies (or by empire),
-  under famous science-fiction names; set up your own, with a logo, on the
-  dashboard's Alliances page.
+- **Alliances:** the first run founds one alliance of two or more bot
+  corporations; after that corporations ally against shared enemies (or by
+  empire), under famous science-fiction names. Set up your own, with a logo,
+  on the dashboard's Alliances page.
 - **Grievances and gate camps:** repeated attacks on a corporation's pilots
   mark the aggressor hostile and then bring a war; security pilots camp their
   headquarters' gates against war targets, criminals and (in low and null)
   hostiles. The dashboard's Reputation page tracks it all.
 - **Trade haulers:** traders climb their race's hauler line up to the Jump
-  Freighter, run the fittings other bots need from Jita to their hub, and fly
-  Freighters and Jump Freighters with an escort of combat corpmates.
+  Freighter (trained for it and topped up to 20B ISK once), keep their hub
+  stocked with fittings, minerals and fuel bought in Jita or a cheaper hub,
+  and fly Freighters and Jump Freighters with an escort of combat corpmates.
+  Pilots buying upgrades shop at their own hub first.
 - **Ships:** upgrading along a ladder for their role, from 5,353 bundled
   community fits.
 - **Combat:** security patrols and combat sites, pirate roams, war patrols
@@ -213,11 +218,13 @@ The menu on the left groups the pages by what you are doing:
 | **Activity** | How many pilots are online, in space and working, with trend lines; how many are working, travelling, holding, queued, paused, standing by, idle or offline; what they are doing; why the others are not; a searchable pilot list with CSV export. |
 | **Pilot panel** | Click any pilot: what it is doing and why, its location, ship, current job step by step, recent jobs with ISK in and out, and orders (pause, resume, stop, recall, mine, colony, patrol, upgrade). Pin it to keep it in the watch panel. |
 | **Corporations** | Every bot corporation, with a filter; a page each with tabs for an overview (whole-corporation orders, headquarters, where goods go, work priorities), its pilots and per-pilot orders, a picture logo and the order log. |
-| **Fleets** | Every fleet with bots in it. The fleet commander picks the kind of fleet (mining, combat, hauling or escort) and a fitting; the bots fit up, dock and undock with the FC, follow the FC in warp and do the job on grid. Mining and combat fleets the bot corporations form on their own are shown too, read-only. |
+| **Alliances** | Every bot alliance and alliance plan with its logo, founder, allies and progress, and a form to set up your own (name, ticker, description, founder, allies, logo). |
+| **Fleets** | Every fleet with bots in it. The fleet commander picks the kind of fleet (mining, combat, hauling or escort) and a fitting; the bots fit up, dock and undock with the FC, follow the FC in warp and do the job on grid. Mining, combat and escort fleets the bot corporations form on their own are shown too, read-only. |
+| **Reputation** | Grievances between corporations (attacks today and in total), who is hostile or at war, with Mark hostile, Declare war and Forgive, and the bots' security status. |
 | **History** | Every finished and running job, with filters, a step-by-step timeline and CSV export. |
 | **World** | Systems, territory (fleets, wars, structures, sovereignty) and the killboard. |
 | **Performance** | Server load, director timing and long server ticks. |
-| **Settings** | Autonomous work, seeding, population and work limits, timings, the name library, Delete all bots. |
+| **Settings** | Autonomous work, seeding, population and work limits, timings, headquarters (home range, risk tolerance, alliance mode), bot fleets, the name library, Delete all bots. |
 | **Guide** | Plain-language help for every page and command, built in. |
 
 Across every page:
@@ -231,6 +238,10 @@ Across every page:
   bell that keeps every order and answer from this visit.
 - **Watch panel** on wide screens: the server at a glance, your pinned pilots
   and the latest operations.
+
+**Alliance logos.** On the **Alliances** page, any picture you give an
+alliance plan is cropped to a 128 px PNG in the browser and stored in EveJS's
+alliance image folder once the alliance exists in game.
 
 **Corporation logos.** On a corporation's page, the **Logo** tab takes a
 PNG, JPEG, WebP or GIF, makes square PNGs from 32 to 1024 pixels in the
@@ -285,6 +296,12 @@ restarts, and win over `.env`. On EVEJS Launcher, values saved under
 | Work slots | 5,000 | 1 – 5,000 |
 | Relocations at once | 100 | 1 – 1,000 |
 | PI colony setups at once | 10 | 1 – 500 |
+| Stay within (jumps of HQ) | 5 | 0 – 30 (0 lets pilots roam) |
+| Risk tolerance | 2 | 0 high-sec, 1 low-sec, 2 null-sec |
+| Alliance mode | 1 | 0 dashboard only, 1 karma, 2 population |
+| Bot fleets | on | on / off |
+| Bot fleets at once | 20 | 0 – 1,000 |
+| Pilots per bot fleet | 5 | 2 – 10 |
 
 <details>
 <summary><strong>Advanced settings</strong></summary>
@@ -353,6 +370,7 @@ and so on; see [Roster and population](GUIDE.md#roster-and-population)).
 | `TRADER_CAPITAL` | 20,000,000,000 | A trader with less is topped up once to this, for its freighters; `0` turns it off |
 | `ALLIANCE_MODE` | 1 | 0 dashboard alliances only, 1 corporations sharing an enemy ally, 2 each empire bands together at start |
 | `RISK_TOLERANCE` | 2 | 0 keeps headquarters miners in high-sec, 1 lets them into low-sec, 2 into null-sec |
+| `BOT_FLEETS` / `MAX_BOT_FLEETS` / `BOT_FLEET_SIZE` | on / 20 / 5 | Bot-led fleets, how many at once, pilots in each |
 | `HOME_RANGE_JUMPS` | 5 | Pilots more jumps than this from their corporation HQ fly home between jobs; `0` turns it off |
 | `ORDER_RESTORE_DELAY_MS` | 60000 | Wait after start-up before saved corporation orders are re-issued |
 | `BOT_VERSUS_BOT` | on | Pirate and war patrols may target bots |
