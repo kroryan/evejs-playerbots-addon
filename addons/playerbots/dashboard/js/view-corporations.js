@@ -2,7 +2,8 @@
 // with its HQ, orders, priorities, roster and command log.
 
 import { getJSON, postJSON, corpCommand, botCommand } from "./api.js";
-import { $, esc, num, stateBar, stateTag, when, toast, confirmDialog, emptyRow, coalesce, replaceKeepingFocus, corpLogo, corporationLogos, hasCorporationLogo, setCorporationLogos, STATE_ORDER, STATE_LABELS } from "./ui.js";
+import { $, esc, num, stateBar, stateTag, when, toast, confirmDialog, coalesce, replaceKeepingFocus, corpLogo, corporationLogos, hasCorporationLogo, setCorporationLogos, pageHead, icon, emptyState, notice, skeleton, STATE_ORDER, STATE_LABELS } from "./ui.js";
+import { remember } from "./prefs.js";
 import { createRoster, loadRoster, rosterHtml, bindRoster } from "./roster.js";
 
 let ctxRef = null;
@@ -14,6 +15,8 @@ let priorityDirty = false;
 let hqDraft = "";
 let workMode = "auto";
 let workTrips = 1;
+let listFilter = "";
+let detailTab = "overview";
 
 function statesFor(counts = {}) {
   return STATE_ORDER.map((id) => ({ id, label: STATE_LABELS[id], count: Number(counts[id]) || 0 }));
@@ -21,32 +24,54 @@ function statesFor(counts = {}) {
 
 // ------------------------------------------------------------------ list
 
+function corpAvatar(c, size = 40) {
+  return corpLogo(c.corporationID, size) || `<span class="corp-logo ph" style="width:${size}px;height:${size}px">${esc((c.ticker || "?").slice(0, 3))}</span>`;
+}
+
+function listRows(corps) {
+  return corps.map((c) => `<tr class="clickable" data-corp="${c.corporationID}" tabindex="0">
+      <td><div class="corp-name">${corpAvatar(c)}<span><strong>${esc(c.corporationName)}</strong> <span class="muted">[${esc(c.ticker)}]</span><span class="sub">${esc(c.allianceName || "No alliance")} · ${esc((c.specialties || []).join(", "))}</span></span></div></td>
+      <td class="num"><strong>${num(c.botCount)}</strong><span class="sub">${num(c.memberCount)} / ${c.memberLimit ? num(c.memberLimit) : "∞"} members</span></td>
+      <td style="min-width:180px">${stateBar(statesFor(c.stateCounts), { small: true })}<span class="sub">${STATE_ORDER.filter((s) => (c.stateCounts || {})[s]).map((s) => `${STATE_LABELS[s]} ${num(c.stateCounts[s])}`).join(" · ")}</span></td>
+      <td>${c.topActivity ? `${esc(c.topActivity.label)} <span class="muted">${num(c.topActivity.count)}</span>` : `<span class="muted">—</span>`}</td>
+      <td><div class="chips">${(c.priorities || []).map((p) => `<span class="chip">${esc(p.label)}</span>`).join("") || `<span class="muted">Default order</span>`}</div></td>
+      <td>${c.held ? `<span class="state warn">Recalled to HQ</span>` : c.recalledPilots ? `<span class="state warn">${num(c.recalledPilots)} recalled</span>` : `<span class="muted">—</span>`}</td>
+    </tr>`).join("");
+}
+
 async function renderList(fresh) {
   const summary = await ctxRef.loadSummary(false);
   if (fresh) ctxRef.setCrumbs([{ label: "Corporations" }]);
-  const corps = [...(summary.corporations || [])].filter((c) => c.botCount > 0);
+  const all = [...(summary.corporations || [])].filter((c) => c.botCount > 0);
+  const words = listFilter.toLowerCase().split(/\s+/).filter(Boolean);
+  const corps = all.filter((c) => words.every((word) => `${c.corporationName} ${c.ticker} ${c.allianceName || ""} ${(c.specialties || []).join(" ")}`.toLowerCase().includes(word)));
   const idle = (c) => { const s = c.stateCounts || {}; const total = Object.values(s).reduce((a, b) => a + b, 0) || 1; return ((s.idle || 0) + (s.paused || 0) + (s.standby || 0) + (s.cooling || 0)) / total; };
   corps.sort(listSort === "name" ? (a, b) => a.corporationName.localeCompare(b.corporationName)
     : listSort === "idle" ? (a, b) => idle(b) - idle(a) || b.botCount - a.botCount
       : (a, b) => b.botCount - a.botCount || a.corporationName.localeCompare(b.corporationName));
+  const table = `<div class="table-wrap"><table>
+    <thead><tr><th>Corporation</th><th class="num">Pilots</th><th>What they are doing</th><th>Top job</th><th>Priorities</th><th>Orders</th></tr></thead>
+    <tbody>${listRows(corps)}</tbody></table></div>
+    ${corps.length ? "" : all.length ? emptyState("search", "No corporation matches", "Try another name or ticker.") : emptyState("corporations", "No bot corporations yet", "They are founded as the roster is seeded.")}`;
+  if (!fresh && $("corp-list")) {
+    $("corp-list").innerHTML = table;
+    $("corp-count").textContent = `${num(all.length)} bot corporations · ${num(all.reduce((sum, c) => sum + c.botCount, 0))} pilots. Open one to see its pilots and give orders.`;
+    return;
+  }
   $("view").innerHTML = `
-  <div class="page-head"><div><h1>Corporations</h1><p>${num(corps.length)} bot corporations · ${num(corps.reduce((sum, c) => sum + c.botCount, 0))} pilots. Open one to see its pilots and give orders.</p></div>
-    <label class="stack">Sort by<select class="field" id="corp-sort"><option value="size"${listSort === "size" ? " selected" : ""}>Most pilots</option><option value="idle"${listSort === "idle" ? " selected" : ""}>Most not working</option><option value="name"${listSort === "name" ? " selected" : ""}>Name</option></select></label></div>
-  <div class="panel"><div class="table-wrap"><table>
-    <thead><tr><th>Corporation</th><th class="num">Pilots</th><th style="min-width:200px">What they are doing</th><th>Top job</th><th>Priorities</th><th>Orders</th></tr></thead>
-    <tbody>${corps.map((c) => `<tr class="clickable" data-corp="${c.corporationID}">
-      <td><div class="corp-name">${corpLogo(c.corporationID, 32) || `<span class="corp-logo ph">${esc((c.ticker || "?").slice(0, 3))}</span>`}<span><strong>${esc(c.corporationName)}</strong> <span class="muted">[${esc(c.ticker)}]</span><span class="sub">${esc(c.allianceName || "No alliance")} · ${esc((c.specialties || []).join(", "))}</span></span></div></td>
-      <td class="num">${num(c.botCount)}<span class="sub">${num(c.memberCount)} / ${c.memberLimit ? num(c.memberLimit) : "∞"} members</span></td>
-      <td>${stateBar(statesFor(c.stateCounts), { small: true })}<span class="sub">${STATE_ORDER.filter((s) => (c.stateCounts || {})[s]).map((s) => `${STATE_LABELS[s]} ${num(c.stateCounts[s])}`).join(" · ")}</span></td>
-      <td>${c.topActivity ? `${esc(c.topActivity.label)} <span class="muted">${num(c.topActivity.count)}</span>` : `<span class="muted">—</span>`}</td>
-      <td><div class="chips">${(c.priorities || []).map((p) => `<span class="chip">${esc(p.label)}</span>`).join("") || `<span class="muted">Default order</span>`}</div></td>
-      <td>${c.held ? `<span class="state warn">Recalled to HQ</span>` : c.recalledPilots ? `<span class="state warn">${num(c.recalledPilots)} recalled</span>` : `<span class="muted">—</span>`}</td>
-    </tr>`).join("") || emptyRow(6, "No bot corporations yet.")}</tbody></table></div></div>`;
+  ${pageHead("corporations", "Corporations", `<span id="corp-count">${num(all.length)} bot corporations · ${num(all.reduce((sum, c) => sum + c.botCount, 0))} pilots. Open one to see its pilots and give orders.</span>`)}
+  <div class="panel">
+    <div class="panel-head"><div class="toolbar">
+      <input class="field" type="search" id="corp-filter" placeholder="Find a corporation, ticker or alliance" value="${esc(listFilter)}" aria-label="Find a corporation" style="min-width:280px">
+      <select class="field" id="corp-sort" aria-label="Sort by"><option value="size"${listSort === "size" ? " selected" : ""}>Most pilots</option><option value="idle"${listSort === "idle" ? " selected" : ""}>Most not working</option><option value="name"${listSort === "name" ? " selected" : ""}>Name</option></select>
+    </div></div>
+    <div id="corp-list">${table}</div>
+  </div>`;
   $("corp-sort").addEventListener("change", (event) => { listSort = event.target.value; void renderList(false); });
-  $("view").querySelector("tbody").addEventListener("click", (event) => {
-    const row = event.target.closest("[data-corp]");
-    if (row) location.hash = `#corporations/${row.dataset.corp}`;
-  });
+  $("corp-filter").addEventListener("input", (event) => { listFilter = event.target.value; void renderList(false); });
+  const open = (row) => { if (row) location.hash = `#corporations/${row.dataset.corp}`; };
+  $("corp-list").addEventListener("click", (event) => open(event.target.closest("[data-corp]")));
+  $("corp-list").addEventListener("keydown", (event) => { if (event.key === "Enter") open(event.target.closest("[data-corp]")); });
 }
 
 // ---------------------------------------------------------------- detail
@@ -65,16 +90,16 @@ function orderLabel(o) {
 
 function ordersHtml() {
   const orders = detail.orders || [];
-  return `<div class="panel-head"><div><h2>Orders</h2><p>For the whole corporation. Select pilots below to order just them. Recall and work orders survive a server restart.</p></div></div>
+  return `<div class="panel-head"><div><h2>${icon("bolt")}Orders</h2><p>For the whole corporation. Select pilots on the Pilots tab to order just them. Recall and work orders survive a server restart.</p></div></div>
   <div class="panel-body">
     <div class="actions">
-      <button class="btn primary" type="button" data-corp-act="recall">Recall all to HQ</button>
-      <button class="btn" type="button" data-corp-act="pause">Pause all</button>
-      <button class="btn" type="button" data-corp-act="resume">Resume all</button>
-      ${orders.length ? `<button class="btn ghost" type="button" data-corp-act="cancel">Cancel orders</button>` : ""}
+      <button class="btn primary" type="button" data-corp-act="recall">${icon("home")}<span>Recall all to HQ</span></button>
+      <button class="btn" type="button" data-corp-act="pause">${icon("pause")}<span>Pause all</span></button>
+      <button class="btn" type="button" data-corp-act="resume">${icon("play")}<span>Resume all</span></button>
+      ${orders.length ? `<button class="btn ghost" type="button" data-corp-act="cancel">${icon("close")}<span>Cancel orders</span></button>` : ""}
     </div>
     <div class="subform">
-      <button class="btn primary" type="button" data-corp-act="work">Send to work</button>
+      <button class="btn primary" type="button" data-corp-act="work">${icon("briefcase")}<span>Send to work</span></button>
       <select class="field" data-corp-arg="mode" aria-label="Work mode">${[["auto", "Auto (by specialty)"], ["mine", "Mine"], ["pi", "PI setup"], ["director", "Hand back to director"]].map(([value, label]) => `<option value="${value}"${value === workMode ? " selected" : ""}>${label}</option>`).join("")}</select>
       <label class="muted">trips <input class="field" style="width:60px" type="number" min="1" max="20" value="${esc(workTrips)}" data-corp-arg="trips"></label>
     </div>
@@ -94,13 +119,13 @@ function hqHtml() {
   const hq = detail.headquarters || {};
   const c = detail.corporation;
   const candidates = detail.headquartersCandidates || [];
-  return `<div class="panel-head"><div><h2>Headquarters</h2><p>Where recalls go and work starts from</p></div></div>
+  return `<div class="panel-head"><div><h2>${icon("home")}Headquarters</h2><p>Where recalls go and work starts from</p></div></div>
   <div class="panel-body">
-    ${hq.error ? `<div class="notice error">${esc(hq.error)}</div>` : `<p style="margin:0 0 4px"><strong>${esc(hq.name || `${hq.kind} ${hq.stationID}`)}</strong></p><p class="muted" style="margin:0">${esc(hq.kind === "structure" ? "Corporation structure" : "NPC station")} in ${esc(hq.systemName || `system ${hq.systemID}`)}${hq.saved ? " · set from the dashboard or chat" : " · the corporation's own HQ"}</p>`}
+    ${hq.error ? notice(esc(hq.error), "error") : `<p style="margin:0 0 4px"><strong>${esc(hq.name || `${hq.kind} ${hq.stationID}`)}</strong></p><p class="muted" style="margin:0">${esc(hq.kind === "structure" ? "Corporation structure" : "NPC station")} in ${esc(hq.systemName || `system ${hq.systemID}`)}${hq.saved ? " · set from the dashboard or chat" : " · the corporation's own HQ"}</p>`}
     <div class="subform">
       ${candidates.length ? `<select class="field" data-hq="pick"><option value="">Choose a corporation structure…</option>${candidates.map((s) => `<option value="${s.structureID}"${s.dockingOnline ? "" : " disabled"}>${esc(s.name)} · ${esc(s.systemName || s.solarSystemID)}${s.dockingOnline ? "" : " (no docking)"}</option>`).join("")}</select>` : ""}
       <input class="field" type="number" min="1" placeholder="or station / structure ID" data-hq="id" style="width:200px" value="${esc(hqDraft)}">
-      <button class="btn" type="button" data-hq="set">Set HQ</button>
+      <button class="btn" type="button" data-hq="set">${icon("map-pin")}<span>Set HQ</span></button>
       ${detail.savedHeadquartersID ? `<button class="btn ghost" type="button" data-hq="clear">Use the corporation's own HQ${c.homeStationName ? ` (${esc(c.homeStationName)})` : ""}</button>` : ""}
     </div>
     ${detail.deposit ? `<h3 class="section-label">Mining and PI output</h3>
@@ -116,26 +141,20 @@ function prioritiesHtml(options) {
   const completed = new Map((detail.corporation.priorities || []).map((p) => [String(p.id), p.completedTasks]));
   const unused = options.filter((o) => !draft.includes(String(o.id)));
   const changed = JSON.stringify(draft) !== JSON.stringify((detail.corporation.priorityIDs || []).map(String));
-  return `<div class="panel-head"><div><h2>Priorities</h2><p>The director serves this corporation's pilots in this order</p></div>${changed ? `<button class="btn primary small" type="button" data-prio="save">Save priorities</button>` : ""}</div>
+  return `<div class="panel-head"><div><h2>${icon("flag")}Priorities</h2><p>The director serves this corporation's pilots in this order</p></div>${changed ? `<button class="btn primary small" type="button" data-prio="save">${icon("check", { size: 16 })}<span>Save priorities</span></button>` : ""}</div>
   <div class="panel-body">
-    ${draft.map((id, index) => `<div class="prio-row"><span class="muted">${index + 1}.</span><strong>${esc(labels.get(id) || id)}</strong><span class="muted num">${num(completed.get(id) || 0)} done</span>
-      <button class="btn small ghost" type="button" data-prio="up" data-index="${index}" ${index === 0 ? "disabled" : ""} aria-label="Move up">↑</button>
-      <button class="btn small ghost" type="button" data-prio="down" data-index="${index}" ${index === draft.length - 1 ? "disabled" : ""} aria-label="Move down">↓</button>
-      <button class="btn small ghost" type="button" data-prio="remove" data-index="${index}" aria-label="Remove">✕</button></div>`).join("") || `<p class="muted" style="margin:0 0 8px">None set: the director uses its normal order.</p>`}
-    ${unused.length ? `<select class="field" data-prio="add"><option value="">+ Add a priority…</option>${unused.map((o) => `<option value="${esc(o.id)}">${esc(o.label)}</option>`).join("")}</select>` : ""}
+    ${draft.map((id, index) => `<div class="prio-row"><span class="prio-index">${index + 1}</span><strong>${esc(labels.get(id) || id)}</strong><span class="muted num small">${num(completed.get(id) || 0)} done</span>
+      <button class="btn small ghost" type="button" data-prio="up" data-index="${index}" ${index === 0 ? "disabled" : ""} aria-label="Move up" title="Move up">${icon("arrow-up", { size: 16 })}</button>
+      <button class="btn small ghost" type="button" data-prio="down" data-index="${index}" ${index === draft.length - 1 ? "disabled" : ""} aria-label="Move down" title="Move down">${icon("arrow-down", { size: 16 })}</button>
+      <button class="btn small ghost" type="button" data-prio="remove" data-index="${index}" aria-label="Remove" title="Remove">${icon("close", { size: 16 })}</button></div>`).join("") || `<p class="muted" style="margin:0 0 8px">None set: the director uses its normal order.</p>`}
+    ${unused.length ? `<select class="field" data-prio="add" style="margin-top:10px" aria-label="Add a priority"><option value="">+ Add a priority…</option>${unused.map((o) => `<option value="${esc(o.id)}">${esc(o.label)}</option>`).join("")}</select>` : ""}
   </div>`;
 }
 
 function selectionActions() {
-  return `<button class="btn small" type="button" data-sel="recall">Recall to HQ</button>
-    <button class="btn small" type="button" data-sel="work">Send to work</button>
-    <button class="btn small" type="button" data-sel="pause">Pause</button>
-    <button class="btn small" type="button" data-sel="resume">Resume</button>
-    <button class="btn small" type="button" data-sel="stop">Stop operation</button>
-    <button class="btn small" type="button" data-sel="mine">Mine</button>
-    <button class="btn small" type="button" data-sel="colony">PI colony</button>
-    <button class="btn small" type="button" data-sel="combat">Combat patrol</button>
-    <button class="btn small" type="button" data-sel="upgrade">Upgrade ship</button>`;
+  const b = (act, iconName, label) => `<button class="btn small" type="button" data-sel="${act}">${icon(iconName, { size: 16 })}<span>${label}</span></button>`;
+  return [b("recall", "home", "Recall to HQ"), b("work", "briefcase", "Send to work"), b("pause", "pause", "Pause"), b("resume", "play", "Resume"),
+    b("stop", "stop", "Stop operation"), b("mine", "ore", "Mine"), b("colony", "planet", "PI colony"), b("combat", "target", "Combat patrol"), b("upgrade", "upgrade", "Upgrade ship")].join("");
 }
 
 // ------------------------------------------------------------------ logo
@@ -153,15 +172,17 @@ function logoHtml(c) {
   const note = corporationLogos.inGame
     ? "Players see a new logo in game the next time they log in."
     : "Players only see it in game once the corporation-logo add-on (evejs-corporation-logos) is installed on the server. The dashboard shows it either way.";
-  return `<div class="panel-head"><div><h2>Logo</h2><p>A picture for this corporation, shown here and in game in place of its emblem</p></div></div>
+  return `<div class="panel-head"><div><h2>${icon("image")}Logo</h2><p>A picture for this corporation, shown here and in game in place of its emblem</p></div>
+    <span class="pill ${corporationLogos.inGame ? "good" : ""}">${icon(corporationLogos.inGame ? "check" : "info", { size: 16 })}${corporationLogos.inGame ? "In-game add-on installed" : "Dashboard only"}</span></div>
   <div class="panel-body">
     <div class="logo-row">${current}${draft}</div>
     <div class="actions">
-      <label class="btn">Choose image…<input type="file" accept="image/png,image/jpeg,image/webp,image/gif" data-logo="file" hidden></label>
-      ${draft ? `<button class="btn primary" type="button" data-logo="save">Save logo</button><button class="btn" type="button" data-logo="discard">Discard</button>` : ""}
-      ${has && !draft ? `<button class="btn" type="button" data-logo="remove">Remove logo</button>` : ""}
+      <label class="btn">${icon("image")}<span>Choose image…</span><input type="file" accept="image/png,image/jpeg,image/webp,image/gif" data-logo="file" hidden></label>
+      ${draft ? `<button class="btn primary" type="button" data-logo="save">${icon("check")}<span>Save logo</span></button><button class="btn" type="button" data-logo="discard">${icon("close")}<span>Discard</span></button>` : ""}
+      ${has && !draft ? `<button class="btn danger" type="button" data-logo="remove">${icon("trash")}<span>Remove logo</span></button>` : ""}
     </div>
-    <p class="muted small">PNG, JPEG, WebP or GIF. A square picture of at least 256 × 256 looks best; other shapes are centred on a transparent background. ${esc(note)}</p>
+    <p class="muted small" style="margin-top:12px">PNG, JPEG, WebP or GIF. A square picture of at least 256 × 256 looks best; other shapes are centred on a transparent background. ${esc(note)}</p>
+    <p class="small" style="margin-top:8px"><a href="https://github.com/ubermidas/evejs-corporation-logos" target="_blank" rel="noopener noreferrer" style="color:var(--accent);font-weight:600">${icon("external", { size: 14 })} About the corporation-logo add-on</a></p>
   </div>`;
 }
 
@@ -269,8 +290,15 @@ function bindLogo() {
 
 function logHtml() {
   const log = detail.log || [];
-  return `<div class="panel-head"><div><h2>Command log</h2><p>Orders from the dashboard and chat, newest first</p></div></div>
-  <ul class="log">${log.map((row) => `<li><div class="log-meta">${when(row.at)} · ${esc(row.source)} · <strong>${esc(row.action)}</strong>${row.success === false ? ' <span class="state bad">Refused</span>' : ""}</div><div>${esc(row.message)}</div></li>`).join("") || `<li class="muted">No orders yet.</li>`}</ul>`;
+  return `<div class="panel-head"><div><h2>${icon("list")}Command log</h2><p>Orders from the dashboard and chat, newest first</p></div></div>
+  ${log.length ? `<ul class="log">${log.map((row) => `<li><div class="log-meta">${when(row.at)} · ${esc(row.source)} · <strong>${esc(row.action)}</strong>${row.success === false ? ' <span class="state bad">Refused</span>' : ""}</div><div>${esc(row.message)}</div></li>`).join("")}</ul>` : emptyState("list", "No orders yet", "Orders from this page and from chat appear here.")}`;
+}
+
+function drawTabs() {
+  if (!$("corp-tabs") || !detail) return;
+  const c = detail.corporation;
+  const tabs = [["overview", "Overview", "corporations", ""], ["pilots", "Pilots", "users", num(c.botCount)], ["logo", "Logo", "image", ""], ["log", "Command log", "list", num((detail.log || []).length)]];
+  $("corp-tabs").innerHTML = tabs.map(([id, label, iconName, count]) => `<button type="button" data-tab="${id}" class="${id === detailTab ? "active" : ""}" aria-pressed="${id === detailTab}">${icon(iconName, { size: 18 })}${label}${count ? `<span class="tab-count">${count}</span>` : ""}</button>`).join("");
 }
 
 const drawDetail = coalesce(async (reloadRoster) => {
@@ -281,10 +309,22 @@ const drawDetail = coalesce(async (reloadRoster) => {
   const c = data.corporation;
   if (!priorityDirty) priorityDraft = (c.priorityIDs || []).map(String);
   ctxRef.setCrumbs([{ label: "Corporations", href: "#corporations" }, { label: c.corporationName }]);
-  $("corp-head").innerHTML = `<div class="page-head"><div class="corp-title">${corpLogo(c.corporationID, 64, "corp-logo large")}<div><h1>${esc(c.corporationName)} <span class="muted">[${esc(c.ticker)}]</span></h1>
-    <p>${esc(c.allianceName || "No alliance")} · ${num(c.botCount)} pilots · ${num(c.memberCount)} / ${c.memberLimit ? num(c.memberLimit) : "∞"} members · ${esc((c.specialties || []).join(", "))}</p></div></div>
-    ${c.held ? `<span class="pill warn">Recalled to HQ</span>` : c.recalledPilots ? `<span class="pill warn">${num(c.recalledPilots)} pilot(s) recalled</span>` : ""}</div>`;
-  $("corp-status").innerHTML = `<div class="panel-head"><div><h2>What its pilots are doing</h2><p>Click a state to filter the pilot list</p></div>${c.topActivity ? `<span class="muted">Top job: <strong>${esc(c.topActivity.label)}</strong> (${num(c.topActivity.count)})</span>` : ""}</div><div class="panel-body">${stateBar(statesFor(c.stateCounts), { selected: [...roster.states] })}</div>`;
+  remember({ href: `#corporations/${c.corporationID}`, label: `${c.corporationName} [${c.ticker}]`, kind: "corporation" });
+  const working = Number((c.stateCounts || {}).working) || 0;
+  $("corp-head").innerHTML = `<div class="corp-header">
+      ${corpLogo(c.corporationID, 96, "corp-logo xl corp-avatar") || `<span class="corp-logo xl ph corp-avatar">${esc((c.ticker || "?").slice(0, 3))}</span>`}
+      <div class="corp-header-text">
+        <h1>${esc(c.corporationName)} <span class="ticker">${esc(c.ticker)}</span>${c.held ? `<span class="pill warn">${icon("home", { size: 15 })}Recalled to HQ</span>` : c.recalledPilots ? `<span class="pill warn">${icon("home", { size: 15 })}${num(c.recalledPilots)} pilot(s) recalled</span>` : ""}</h1>
+        <div class="handle">${esc(c.allianceName || "No alliance")}</div>
+        <div class="profile-line">
+          <span>${icon("briefcase")}${esc((c.specialties || []).join(", ") || "No specialty")}</span>
+          ${c.topActivity ? `<span>${icon("activity")}Top job: ${esc(c.topActivity.label)} (${num(c.topActivity.count)})</span>` : ""}
+        </div>
+      </div>
+      <div class="corp-metrics"><div><b>${num(c.botCount)}</b><span>Pilots</span></div><div><b>${num(working)}</b><span>Working</span></div><div><b>${num(c.memberCount)}</b><span>of ${c.memberLimit ? num(c.memberLimit) : "∞"} members</span></div></div>
+    </div>`;
+  drawTabs();
+  $("corp-status").innerHTML = `<div class="panel-head"><div><h2>${icon("layers")}What its pilots are doing</h2><p>Click a state to filter the pilot list</p></div>${c.topActivity ? `<span class="muted">Top job: <strong>${esc(c.topActivity.label)}</strong> (${num(c.topActivity.count)})</span>` : ""}</div><div class="panel-body">${stateBar(statesFor(c.stateCounts), { selected: [...roster.states] })}</div>`;
   $("corp-orders").innerHTML = ordersHtml();
   if (!$("corp-logo").contains(document.activeElement)) $("corp-logo").innerHTML = logoHtml(c);
   replaceKeepingFocus($("corp-hq"), hqHtml());
@@ -320,7 +360,7 @@ async function runSelection(action) {
     }
     return runCorp(action, args, action === "recall"
       ? `Recall ${num(ids.length)} selected pilot(s) of ${c.corporationName} to the HQ? They stop their work, dock there and stay paused until sent to work or resumed.`
-      : `Send ${num(ids.length)} selected pilot(s) of ${c.corporationName} to work${modeLabel}? The mode and trips are taken from the Orders panel.`);
+      : `Send ${num(ids.length)} selected pilot(s) of ${c.corporationName} to work${modeLabel}? The mode and trips are taken from the Orders panel on the Overview tab.`);
   }
   const args = {};
   const labels = { pause: "Pause", resume: "Resume", stop: "Stop the current operation of", mine: "Start mining for", colony: "Start PI colony setup for", combat: "Start a combat patrol for", upgrade: "Start a ship upgrade for" };
@@ -340,12 +380,23 @@ async function renderDetail(fresh) {
       priorityDirty = false;
       hqDraft = "";
     }
-    $("view").innerHTML = `<div id="corp-head"><div class="empty">Loading corporation…</div></div>
-      <div class="grid-2"><div id="corp-orders" class="panel"></div><div id="corp-hq" class="panel"></div></div>
-      <div id="corp-logo" class="panel"></div>
-      <div id="corp-status" class="panel"></div>
-      <div class="grid-2"><div id="corp-prio" class="panel"></div><div id="corp-log" class="panel" style="max-height:360px;overflow-y:auto"></div></div>
-      <div id="corp-roster" class="panel"></div>`;
+    $("view").innerHTML = `<div id="corp-head">${skeleton(1)}</div>
+      <nav class="tabs" id="corp-tabs" aria-label="Corporation sections"></nav>
+      <div class="corp-tabs" id="corp-sections" data-active="${esc(detailTab)}">
+        <div class="tab-overview"><div id="corp-status" class="panel"></div>
+          <div class="grid-2 top"><div id="corp-orders" class="panel"></div><div id="corp-hq" class="panel"></div></div>
+          <div id="corp-prio" class="panel"></div></div>
+        <div class="tab-pilots"><div id="corp-roster" class="panel"></div></div>
+        <div class="tab-logo"><div id="corp-logo" class="panel"></div></div>
+        <div class="tab-log"><div id="corp-log" class="panel"></div></div>
+      </div>`;
+    $("corp-tabs").addEventListener("click", (event) => {
+      const tab = event.target.closest("[data-tab]");
+      if (!tab) return;
+      detailTab = tab.dataset.tab;
+      $("corp-sections").dataset.active = detailTab;
+      drawTabs();
+    });
     bindRoster($("corp-roster"), roster, (reload) => drawDetail(reload));
     if (logoDraft && logoDraft.corporationID !== id) logoDraft = null;
     bindLogo();

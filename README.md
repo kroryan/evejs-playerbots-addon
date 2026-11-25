@@ -192,18 +192,33 @@ because the dashboard can command every bot; that is why it only listens on
 the local machine by default. From another computer, use an SSH tunnel, or
 see `DASHBOARD_BIND` below and only on a network you trust.
 
+It is black by default, with an optional white mode, and works on a phone.
+The menu on the left groups the pages by what you are doing:
+
 | Page | What you get |
 | --- | --- |
-| **Activity** | How many pilots are working, travelling, holding, queued, paused, standing by, idle or offline; what they are doing; why the others are not; a searchable pilot list. |
-| **Pilot panel** | Click any pilot: what it is doing and why, its location, ship, current job step by step, recent jobs with ISK in and out, and orders (pause, resume, stop, recall, mine, colony, patrol, upgrade). |
-| **Corporations** | Every bot corporation; a page each with whole-corporation orders, headquarters, where goods go, work priorities, a picture logo, per-pilot orders and an order log. |
-| **History** | Every finished and running job, with filters and a step-by-step timeline. |
+| **Activity** | How many pilots are online, in space and working, with trend lines; how many are working, travelling, holding, queued, paused, standing by, idle or offline; what they are doing; why the others are not; a searchable pilot list with CSV export. |
+| **Pilot panel** | Click any pilot: what it is doing and why, its location, ship, current job step by step, recent jobs with ISK in and out, and orders (pause, resume, stop, recall, mine, colony, patrol, upgrade). Pin it to keep it in the watch panel. |
+| **Corporations** | Every bot corporation, with a filter; a page each with tabs for an overview (whole-corporation orders, headquarters, where goods go, work priorities), its pilots and per-pilot orders, a picture logo and the order log. |
+| **History** | Every finished and running job, with filters, a step-by-step timeline and CSV export. |
 | **World** | Systems, territory (fleets, wars, structures, sovereignty) and the killboard. |
 | **Performance** | Server load, director timing and long server ticks. |
 | **Settings** | Autonomous work, seeding, population and work limits, timings, the name library, Delete all bots. |
 | **Guide** | Plain-language help for every page and command, built in. |
 
-**Corporation logos.** On a corporation's page, the **Logo** panel takes a
+Across every page:
+
+- **Search** with <kbd>Ctrl</kbd> <kbd>K</kbd>: pilots by name or ID,
+  corporations, pages, guide topics and dashboard commands in one box.
+- **Keyboard shortcuts**: <kbd>G</kbd> then a letter goes to a page,
+  <kbd>R</kbd> refreshes, <kbd>L</kbd> pauses live updates, <kbd>T</kbd>
+  switches black and white mode, <kbd>?</kbd> lists them all.
+- **Live updates** every 15 seconds, which you can pause or slow down, and a
+  bell that keeps every order and answer from this visit.
+- **Watch panel** on wide screens: the server at a glance, your pinned pilots
+  and the latest operations.
+
+**Corporation logos.** On a corporation's page, the **Logo** tab takes a
 PNG, JPEG, WebP or GIF, makes square PNGs from 32 to 1024 pixels in the
 browser, and stores them in EveJS's image folder
 (`<runtime images>/Corporation/<id>_<size>.png`). The logo then shows next to

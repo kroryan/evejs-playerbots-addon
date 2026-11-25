@@ -3,6 +3,49 @@
 Newest first. The Docker add-on keeps the upstream version number (0.2.152);
 the Windows launcher package adds a fourth number for its own releases.
 
+## Unreleased: dashboard redesign
+
+On the `dashboard-redesign` branch of the ubermidas fork. A new front end for
+the dashboard, the first step of the interface planned to ship with the C#
+client. Browser files only: no server, API or game data changes.
+
+- **New look.** Black by default, with an optional **white mode** (the sun
+  button, <kbd>T</kbd>, or *Match my system theme* in the search). Calmer
+  type, square-cornered cards, white primary buttons and one accent colour.
+- **Icons everywhere.** A new set of SVG icons drawn for the add-on, on every
+  menu entry, page title, panel, button and order, and a new Playerbots mark
+  and favicon.
+- **Grouped menu** (Monitor, Manage, Help) that shrinks to icons on narrow
+  windows and moves to the bottom of the screen on a phone.
+- **Search everything** with <kbd>Ctrl</kbd> <kbd>K</kbd> or <kbd>/</kbd>:
+  pilots by name or ID, corporations, pages, guide topics and commands; it
+  remembers recently opened pilots and corporations.
+- **Keyboard shortcuts:** <kbd>G</kbd> then a letter for each page,
+  <kbd>R</kbd> refresh, <kbd>L</kbd> pause live updates, <kbd>W</kbd> watch
+  panel, <kbd>T</kbd> theme, <kbd>?</kbd> for the list.
+- **Live updates you control:** pause them, or refresh every 10, 15, 30 or 60
+  seconds. Remembered in the browser.
+- **Notifications:** the bell keeps every order and answer from this visit.
+- **Watch panel** on wide screens: pilots, online, in space and working with
+  trend lines, **pinned pilots** (pin from the pilot panel) and the latest
+  operations.
+- **Activity:** headline numbers with trend lines, job and reason breakdowns
+  with bars and icons.
+- **Pilot panel:** a clearer header, Pin and Copy ID, quick Pause, Stop and
+  Recall buttons, and one card per job with its options.
+- **Corporations:** a filter box on the list; each corporation's page has a
+  header with its numbers and tabs for Overview, Pilots, Logo and Command log.
+  The Logo tab says whether the in-game add-on is installed and links to it.
+- **CSV export** of the pilot list (Activity and a corporation's Pilots tab)
+  and of History, for the current filters, up to 5,000 rows.
+- **Settings:** switches for autonomous work and seeding, and the save bar
+  shows when there are unsaved changes.
+- **Guide:** a new *Getting around the dashboard* topic, and the pages that
+  describe the dashboard follow the new layout.
+- Empty lists say so with an icon and a next step; loading pages show
+  placeholders; everything works with the keyboard and screen readers get
+  labels for icon-only buttons.
+
 ## Unreleased: corporation logos
 
 On the `corp-logos` branch of the ubermidas fork.

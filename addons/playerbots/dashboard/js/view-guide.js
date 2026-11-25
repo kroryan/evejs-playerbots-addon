@@ -2,7 +2,7 @@
 // #guide is the contents page, #guide/<topic> one topic. Static content only,
 // so the page never refreshes on the timer.
 
-import { $, esc, toast } from "./ui.js";
+import { $, esc, toast, pageHead, icon } from "./ui.js";
 import { COMMANDS, GROUPS, TOPICS } from "./guide-content.js";
 
 export const autoRefresh = false;
@@ -13,12 +13,12 @@ let currentTopic = "";
 let wired = false;
 
 const QUICK = [
-  ["first-hour", "Set up a new server", "Seeding, autonomous work and what to expect."],
-  ["activity", "See why bots aren't working", "States, reasons and the director."],
-  ["corporations", "Recall or move a corporation", "Whole-corporation and per-pilot orders."],
-  ["recruitment", "Put bots in my corporation", "Invite them all, or recruit automatically."],
-  ["fleets", "Fly with bots", "Fleets, /follow, /escort and /attack."],
-  ["troubleshooting", "Fix a problem", "Common messages and what to do."],
+  ["first-hour", "Set up a new server", "Seeding, autonomous work and what to expect.", "sparkle"],
+  ["activity", "See why bots aren't working", "States, reasons and the director.", "activity"],
+  ["corporations", "Recall or move a corporation", "Whole-corporation and per-pilot orders.", "home"],
+  ["recruitment", "Put bots in my corporation", "Invite them all, or recruit automatically.", "users"],
+  ["fleets", "Fly with bots", "Fleets, /follow, /escort and /attack.", "ship"],
+  ["troubleshooting", "Fix a problem", "Common messages and what to do.", "alert"],
 ];
 
 function normal(text) {
@@ -65,10 +65,10 @@ function sidebar(active) {
 }
 
 function contents() {
-  return `<div class="page-head"><div><h1>Guide</h1><p>How to run Playerbots, in plain words. Every page of the dashboard has a <strong>Guide</strong> button in the top bar that opens its topic here.</p></div></div>
+  return `${pageHead("guide", "Guide", `How to run Playerbots, in plain words. Every page has a guide button ${icon("guide", { size: 15 })} in the top bar that opens its topic here, and <kbd>Ctrl</kbd> <kbd>K</kbd> searches the guide too.`)}
     <h2 class="g-h2">Common tasks</h2>
     <div class="g-cards">
-      ${QUICK.map(([id, title, text]) => `<a class="g-card" href="#guide/${id}"><strong>${esc(title)}</strong><span>${esc(text)}</span></a>`).join("")}
+      ${QUICK.map(([id, title, text, iconName]) => `<a class="g-card" href="#guide/${id}">${icon(iconName, { size: 18 })}<strong>${esc(title)}</strong><span>${esc(text)}</span></a>`).join("")}
     </div>
     ${GROUPS.map((group) => `<h2 class="g-h2">${esc(group.title)}</h2>
       <div class="g-index">

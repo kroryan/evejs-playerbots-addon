@@ -3,7 +3,7 @@
 // edits are never lost; seeding status refreshes on its own.
 
 import { getJSON, postJSON } from "./api.js";
-import { $, esc, num, toast, confirmDialog } from "./ui.js";
+import { $, esc, num, toast, confirmDialog, pageHead, icon, notice } from "./ui.js";
 
 export const autoRefresh = false;
 
@@ -69,9 +69,9 @@ function fieldHtml(field) {
   return `<label>${esc(label)}<input class="field" name="${name}" type="number" min="${min}" max="${max}" step="${step}" required value="${esc(toForm(saved, field) ?? "")}"${locked ? ` disabled title="${esc(LAUNCHER_NOTE)}"` : ""}>${hint ? `<small>${esc(hint)}</small>` : ""}${note}</label>`;
 }
 
-function checkHtml(key, label, suffix = "") {
+function checkHtml(key, label, detail = "") {
   const locked = isLocked(key);
-  return `<label class="check"${locked ? ` title="${esc(LAUNCHER_NOTE)}"` : ""}><input type="checkbox" name="${key}" ${saved[key] ? "checked" : ""}${locked ? " disabled" : ""}> ${label}${suffix}${locked ? ` <span class="muted">(${esc(LAUNCHER_NOTE)})</span>` : ""}</label>`;
+  return `<label class="switch"${locked ? ` title="${esc(LAUNCHER_NOTE)}"` : ""}><span><strong>${label}</strong><small>${detail}${locked ? ` ${esc(LAUNCHER_NOTE)}.` : ""}</small></span><input type="checkbox" role="switch" name="${key}" ${saved[key] ? "checked" : ""}${locked ? " disabled" : ""}></label>`;
 }
 
 function group(id) {
@@ -85,8 +85,8 @@ function seedText(seed, roster) {
   const progress = target ? Math.min(100, Math.round(count * 100 / target)) : 0;
   const state = seed.running ? "Creating pilots now" : seed.enabled ? (count >= target ? "Seeding finished" : "Seeding on") : "Seeding off";
   const back = last && last.backpressure ? `Backing off: ${last.stopReason || "server load"}.` : "";
-  return `<div class="switch-row"><div><strong>${esc(state)}</strong> · ${num(count)} of ${num(target)} pilots (${progress}%)</div><span class="bar" style="width:220px"><i style="width:${progress}%"></i></span></div>
-    <p class="muted" style="margin:6px 0 0;font-size:13px">Event loop p95 ${Number(seed.eventLoopP95Ms || 0).toFixed(0)} ms (limit ${num(seed.eventLoopSafetyLimitMs)}) · EveJS CPU ${Number(seed.processCpuPercent || 0).toFixed(0)}% (limit ${num(seed.processCpuSafetyLimitPercent)}%)${last ? ` · last batch created ${num(last.created)} ${last.at ? `at ${esc(new Date(last.at).toLocaleTimeString())}` : ""}` : ""}. ${esc(back)}</p>`;
+  return `${icon("users", { size: 18 })}<div style="flex:1"><div class="switch-row"><div><strong>${esc(state)}</strong> · ${num(count)} of ${num(target)} pilots (${progress}%)</div><span class="bar" style="width:220px"><i style="width:${progress}%"></i></span></div>
+    <p class="muted" style="margin:6px 0 0;font-size:12.5px">Event loop p95 ${Number(seed.eventLoopP95Ms || 0).toFixed(0)} ms (limit ${num(seed.eventLoopSafetyLimitMs)}) · EveJS CPU ${Number(seed.processCpuPercent || 0).toFixed(0)}% (limit ${num(seed.processCpuSafetyLimitPercent)}%)${last ? ` · last batch created ${num(last.created)} ${last.at ? `at ${esc(new Date(last.at).toLocaleTimeString())}` : ""}` : ""}. ${esc(back)}</p></div>`;
 }
 
 async function refreshSeed(roster) {
@@ -95,27 +95,27 @@ async function refreshSeed(roster) {
 }
 
 function pageHtml(effectiveAutowork, roster) {
-  return `<div class="page-head"><div><h1>Settings</h1><p>Saved changes apply to EveJS and the add-on without a restart.</p></div></div>
+  return `${pageHead("settings", "Settings", "Saved changes apply to EveJS and the add-on without a restart.")}
   <form id="settings-form">
-    <div class="panel"><div class="panel-head"><div><h2>Autonomous work</h2><p>When off, the director gives no pilot new work. Running operations finish and dashboard orders still work.</p></div></div>
+    <div class="panel"><div class="panel-head"><div><h2>${icon("bolt")}Autonomous work</h2><p>When off, the director gives no pilot new work. Running operations finish and dashboard orders still work.</p></div></div>
       <div class="panel-body"><div class="form-grid">
-        ${checkHtml("autoworkEnabled", "Autonomous work on", ` <span class="muted">(now ${effectiveAutowork ? "on" : "off"})</span>`)}
-        ${checkHtml("rosterSeedEnabled", "Gradual roster seeding on")}
+        ${checkHtml("autoworkEnabled", "Autonomous work", `The director hands out work on its own. Now ${effectiveAutowork ? "on" : "off"}.`)}
+        ${checkHtml("rosterSeedEnabled", "Gradual roster seeding", "Creates pilots in small batches until the roster target is reached.")}
       </div>
       <div id="seed-status" class="notice info" style="margin:14px 0 0"></div></div></div>
-    <div class="panel"><div class="panel-head"><h2>Population</h2></div><div class="panel-body"><div class="form-grid">${group("population")}</div></div></div>
-    <div class="panel"><div class="panel-head"><h2>Work capacity</h2></div><div class="panel-body"><div class="form-grid">${group("work")}</div></div></div>
-    <div class="panel"><div class="panel-body" style="padding-top:12px"><details class="advanced"><summary>Advanced: director, add-on cycle and seeding safety</summary>
-      <h3 style="margin:6px 0 10px">Director and add-on cycle</h3><div class="form-grid">${group("advanced")}</div>
-      <h3 style="margin:18px 0 10px">Seeding safety</h3><div class="form-grid">${group("seeding")}</div></details></div></div>
-    <div class="save-bar"><span class="muted" id="settings-saved">${saved.updatedAt ? `Last saved ${esc(new Date(saved.updatedAt).toLocaleString())}` : "Showing environment defaults"}</span>
-      <span class="actions"><button type="button" class="btn ghost" id="settings-defaults">Reset to defaults</button><button type="submit" class="btn primary" id="settings-save">Save settings</button></span></div>
+    <div class="panel"><div class="panel-head"><div><h2>${icon("users")}Population</h2><p>How many pilots exist, how many are online, and where they may gather</p></div></div><div class="panel-body"><div class="form-grid">${group("population")}</div></div></div>
+    <div class="panel"><div class="panel-head"><div><h2>${icon("briefcase")}Work capacity</h2><p>How much work runs at the same time</p></div></div><div class="panel-body"><div class="form-grid">${group("work")}</div></div></div>
+    <div class="panel"><div class="panel-body" style="padding-top:14px"><details class="advanced"><summary>${icon("chevron-right", { size: 16 })}Advanced: director, add-on cycle and seeding safety</summary>
+      <h3 class="section-label">Director and add-on cycle</h3><div class="form-grid">${group("advanced")}</div>
+      <h3 class="section-label">Seeding safety</h3><div class="form-grid">${group("seeding")}</div></details></div></div>
+    <div class="save-bar" id="settings-bar"><span class="muted" id="settings-saved">${saved.updatedAt ? `Last saved ${esc(new Date(saved.updatedAt).toLocaleString())}` : "Showing environment defaults"}</span>
+      <span class="actions"><button type="button" class="btn ghost" id="settings-defaults">${icon("refresh")}<span>Reset to defaults</span></button><button type="submit" class="btn primary" id="settings-save">${icon("check")}<span>Save settings</span></button></span></div>
   </form>
-  <div class="panel"><div class="panel-head"><div><h2>Corporation and alliance names</h2><p>Applies to organizations created from now on. Empty lists keep the original naming.</p></div></div>
-    <div class="panel-body"><textarea id="names-text" class="name-library-editor" rows="12" spellcheck="false"></textarea>
-    <div class="save-bar"><span class="muted" id="names-status">Loading…</span><span class="actions"><button type="button" class="btn ghost" id="names-template">Load template</button><button type="button" class="btn primary" id="names-save">Save name library</button></span></div></div></div>
-  <div class="panel danger-zone"><div class="panel-head"><div><h2>Delete all bots</h2><p>Cancels every playerbot's market orders, stops its work and deletes the character. Assets go to its corporation. Human characters are untouched. This cannot be undone.</p></div></div>
-    <div class="panel-body"><div class="toolbar"><label class="stack">Type DELETE ALL BOTS to confirm<input class="field" id="reset-confirm" autocomplete="off" spellcheck="false"></label><label class="check"><input type="checkbox" id="reset-reseed" checked> Seed a new roster afterwards</label><button type="button" class="btn danger" id="reset-start">Delete all bots</button></div>
+  <div class="panel"><div class="panel-head"><div><h2>${icon("hash")}Corporation and alliance names</h2><p>Applies to organizations created from now on. Empty lists keep the original naming.</p></div></div>
+    <div class="panel-body"><textarea id="names-text" class="name-library-editor" rows="12" spellcheck="false" aria-label="Name library (JSON)"></textarea>
+    <div class="save-bar"><span class="muted" id="names-status">Loading…</span><span class="actions"><button type="button" class="btn ghost" id="names-template">${icon("list")}<span>Load template</span></button><button type="button" class="btn primary" id="names-save">${icon("check")}<span>Save name library</span></button></span></div></div></div>
+  <div class="panel danger-zone"><div class="panel-head"><div><h2>${icon("trash")}Delete all bots</h2><p>Cancels every playerbot's market orders, stops its work and deletes the character. Assets go to its corporation. Human characters are untouched. This cannot be undone.</p></div></div>
+    <div class="panel-body"><div class="toolbar"><label class="stack">Type DELETE ALL BOTS to confirm<input class="field" id="reset-confirm" autocomplete="off" spellcheck="false"></label><label class="check"><input type="checkbox" id="reset-reseed" checked> Seed a new roster afterwards</label><button type="button" class="btn danger" id="reset-start">${icon("trash")}<span>Delete all bots</span></button></div>
     <p class="muted" id="reset-status" style="margin:10px 0 0">Loading…</p></div></div>`;
 }
 
@@ -209,6 +209,12 @@ async function load(fresh) {
   clearInterval(seedTimer);
   seedTimer = setInterval(() => void refreshSeed(roster), 10_000);
   $("settings-form").addEventListener("submit", (event) => void save(event));
+  const markDirty = () => {
+    $("settings-bar").classList.add("dirty");
+    $("settings-saved").textContent = "Unsaved changes";
+  };
+  $("settings-form").addEventListener("input", markDirty);
+  $("settings-form").addEventListener("change", markDirty);
   $("settings-defaults").addEventListener("click", async () => {
     if (!defaults || !(await confirmDialog("Reset settings", "Reset every setting on this page to its default and save?", "Reset and save"))) return;
     saved = { ...saved, ...defaults };

@@ -302,19 +302,32 @@ on the EveJS host, or use the SSH tunnel below. The dashboard can command
 pilots and corporations, so publish it more widely
 (`EVEJS_PLAYER_BOTS_DASHBOARD_BIND=0.0.0.0`) only on a trusted network.
 
-The dashboard has six pages. **Activity** shows one state per pilot (working,
+The dashboard has seven pages, grouped in the menu as Monitor, Manage and Help. **Activity** shows one state per pilot (working,
 travelling, holding, queued, cooling down, paused, standing by, idle,
 offline), what each pilot is doing in plain words, and why the rest are not
 working, with a pilot panel that gives per-pilot orders (pause, resume, stop
 or resume an operation, mine, PI colony, combat patrol, ship upgrade, recall
 to the corporation HQ). **Corporations** lists bot corporations and opens a
-page per corporation with its HQ, output deposit, priorities, orders (recall,
-send to work, pause, resume, cancel), a selectable pilot roster for orders to
-chosen pilots, and a command log. Recall and work orders, from the dashboard
+page per corporation with tabs: Overview (HQ, output deposit, priorities,
+orders: recall, send to work, pause, resume, cancel), Pilots (a selectable
+roster for orders to chosen pilots), Logo, and Command log. Recall and work orders, from the dashboard
 or `/bots corp`, are saved and re-issued about a minute after a restart
 (`EVEJS_PLAYER_BOTS_ORDER_RESTORE_DELAY_MS`). **History** is the operation
 archive, **World** holds systems, territory and the killboard, and
 **Performance** and **Settings** are as described below.
+
+The dashboard is black by default with an optional white mode, and works on a
+phone. Across every page: <kbd>Ctrl</kbd> <kbd>K</kbd> searches pilots,
+corporations, pages, guide topics and commands; <kbd>G</kbd> then a letter
+opens a page (<kbd>A</kbd> Activity, <kbd>W</kbd> World, <kbd>H</kbd>
+History, <kbd>P</kbd> Performance, <kbd>C</kbd> Corporations, <kbd>S</kbd>
+Settings, <kbd>G</kbd> Guide); <kbd>R</kbd> refreshes, <kbd>L</kbd> pauses
+live updates, <kbd>W</kbd> shows or hides the watch panel, <kbd>T</kbd>
+switches black and white mode and <kbd>?</kbd> lists every shortcut. The
+watch panel on wide screens shows the server at a glance, pinned pilots and
+the latest operations. The pilot list and History export the current filters
+as CSV. Theme, refresh interval and pinned pilots are kept in the browser's
+local storage; nothing is sent to the server.
 
 Killboard ship renders are fetched from the official EVE image service by a
 size-limited same-origin dashboard proxy. This avoids mixed-origin and

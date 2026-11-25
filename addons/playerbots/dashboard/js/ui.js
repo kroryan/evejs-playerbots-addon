@@ -1,6 +1,10 @@
 // Shared formatting and rendering helpers. Every value placed in HTML goes
 // through esc() unless it is markup built here.
 
+import { icon } from "./icons.js";
+
+export { icon };
+
 export const $ = (id) => document.getElementById(id);
 
 export const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (c) => ({
@@ -76,7 +80,41 @@ export function corpLogo(corporationID, size = 32, cls = "corp-logo") {
   const version = corporationLogos.logos[id];
   if (id <= 0 || !version) return "";
   const source = size <= 32 ? 64 : size <= 64 ? 128 : 256;
-  return `<img class="${esc(cls)}" src="/api/corporation-logo?corporationID=${id}&amp;size=${source}&amp;v=${esc(version)}" alt="" width="${size}" height="${size}" loading="lazy">`;
+  // The size is set inline too, so layout rules for avatars never stretch a small logo.
+  return `<img class="${esc(cls)}" src="/api/corporation-logo?corporationID=${id}&amp;size=${source}&amp;v=${esc(version)}" alt="" width="${size}" height="${size}" style="width:${size}px;height:${size}px;flex:0 0 ${size}px" loading="lazy">`;
+}
+
+// Page title block: icon, title, one line of context, and optional actions.
+export function pageHead(iconName, title, subtitle = "", actions = "") {
+  return `<div class="page-head"><div>${iconName ? `<span class="head-icon">${icon(iconName, { size: 24 })}</span>` : ""}<div><h1>${title}</h1>${subtitle ? `<p>${subtitle}</p>` : ""}</div></div>${actions ? `<div class="head-actions">${actions}</div>` : ""}</div>`;
+}
+
+export function emptyState(iconName, title, text = "") {
+  return `<div class="empty-state">${icon(iconName, { size: 34 })}<strong>${esc(title)}</strong>${text ? `<span>${esc(text)}</span>` : ""}</div>`;
+}
+
+// A notice with its icon. kind: "" (caution), "info", "error". html is markup.
+export function notice(html, kind = "", cls = "") {
+  const name = kind === "info" ? "info" : "alert";
+  return `<div class="notice${kind ? ` ${kind}` : ""}${cls ? ` ${cls}` : ""}">${icon(name, { size: 20 })}<div>${html}</div></div>`;
+}
+
+// A small line chart of recent values; "" with fewer than two points.
+export function sparkline(values, { width = 84, height = 26 } = {}) {
+  const points = (values || []).map(Number).filter(Number.isFinite);
+  if (points.length < 2) return "";
+  const min = Math.min(...points);
+  const max = Math.max(...points);
+  const span = max - min || 1;
+  const step = width / (points.length - 1);
+  const xy = points.map((value, index) => [index * step, height - 2 - ((value - min) / span) * (height - 4)]);
+  const line = xy.map(([x, y], index) => `${index ? "L" : "M"}${x.toFixed(1)} ${y.toFixed(1)}`).join("");
+  const area = `${line}L${width} ${height}L0 ${height}Z`;
+  return `<svg class="spark" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" aria-hidden="true"><path class="area" d="${area}"/><path class="line" d="${line}"/></svg>`;
+}
+
+export function skeleton(cards = 2) {
+  return Array.from({ length: cards }, () => `<div class="skeleton-card"><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div></div>`).join("");
 }
 
 export function pilotCell(row) {
@@ -102,8 +140,8 @@ export function stateBar(states, { selected = [], small = false } = {}) {
     <div class="legend">${states.map((s) => `<button type="button" data-state="${esc(s.id)}" class="${selected.includes(s.id) ? "on" : ""}"><span class="swatch bg-${esc(s.id)}"></span>${esc(s.label)} <b>${num(s.count)}</b></button>`).join("")}</div>`;
 }
 
-export function stat(label, value, detail = "", accent = "") {
-  return `<div class="stat${accent ? ` accent-${accent}` : ""}"><div class="label">${esc(label)}</div><div class="value">${esc(value)}</div>${detail ? `<div class="detail">${esc(detail)}</div>` : ""}</div>`;
+export function stat(label, value, detail = "", accent = "", iconName = "", spark = "") {
+  return `<div class="stat${accent ? ` accent-${accent}` : ""}"><div class="label">${iconName ? icon(iconName, { size: 17 }) : ""}${esc(label)}</div><div class="value">${esc(value)}</div>${detail ? `<div class="detail">${esc(detail)}</div>` : ""}${spark}</div>`;
 }
 
 export function emptyRow(cols, text) {
@@ -113,15 +151,27 @@ export function emptyRow(cols, text) {
 export function pager(page, pageSize, total, prefix) {
   const pages = Math.max(1, Math.ceil(total / pageSize));
   return `<div class="pager"><span>${num(total)} total · page ${num(page + 1)} of ${num(pages)}</span>
-    <button class="btn small" type="button" data-page="${prefix}:prev" ${page <= 0 ? "disabled" : ""}>← Previous</button>
-    <button class="btn small" type="button" data-page="${prefix}:next" ${page + 1 >= pages ? "disabled" : ""}>Next →</button></div>`;
+    <button class="btn small" type="button" data-page="${prefix}:prev" ${page <= 0 ? "disabled" : ""}>${icon("chevron-left", { size: 16 })}<span>Previous</span></button>
+    <button class="btn small" type="button" data-page="${prefix}:next" ${page + 1 >= pages ? "disabled" : ""}><span>Next</span>${icon("chevron-right", { size: 16 })}</button></div>`;
 }
 
+// Every toast this visit, newest first, for the bell in the top bar.
+export const notifications = [];
+const NOTIFY_LIMIT = 50;
+
 export function toast(message, kind = "") {
+  const text = String(message ?? "");
+  notifications.unshift({ message: text, kind, at: Date.now() });
+  notifications.length = Math.min(notifications.length, NOTIFY_LIMIT);
+  document.dispatchEvent(new CustomEvent("playerbots:notify"));
+  const root = $("toasts");
+  if (!root) return;
   const node = document.createElement("div");
   node.className = `toast ${kind}`;
-  node.textContent = message;
-  $("toasts").appendChild(node);
+  node.setAttribute("role", kind === "bad" ? "alert" : "status");
+  node.innerHTML = `${icon(kind === "bad" ? "alert" : kind === "good" ? "check" : "info", { size: 20 })}<span></span>`;
+  node.querySelector("span").textContent = text;
+  root.appendChild(node);
   setTimeout(() => node.remove(), kind === "bad" ? 9000 : 5000);
 }
 
@@ -145,7 +195,7 @@ export function confirmDialog(title, body, confirmLabel = "Confirm", danger = fa
 export function showDialog(title, html) {
   const dialog = $("dialog");
   dialog.className = "";
-  dialog.innerHTML = `<div class="dialog-head"><h2>${esc(title)}</h2><button type="button" aria-label="Close" data-close>×</button></div>${html}`;
+  dialog.innerHTML = `<div class="dialog-head"><h2>${esc(title)}</h2><button type="button" aria-label="Close" data-close>${icon("close")}</button></div>${html}`;
   dialog.onclick = (event) => { if (event.target.closest("[data-close]")) dialog.close(); };
   dialog.oncancel = null;
   dialog.showModal();
@@ -154,8 +204,8 @@ export function showDialog(title, html) {
 export function security(value) {
   if (value === null || value === undefined || value === "") return "";
   const n = Number(value);
-  const color = n >= 0.45 ? "#8ce7c2" : n > 0 ? "#f6d08f" : "#ffaab1";
-  return `<span class="mono" style="color:${color}">${n.toFixed(1)}</span>`;
+  const band = n >= 0.45 ? "high" : n > 0 ? "low" : "null";
+  return `<span class="mono" style="color:var(--sec-${band})">${n.toFixed(1)}</span>`;
 }
 
 // Runs fn one call at a time. A call made while one is running is not
