@@ -618,6 +618,9 @@ CEOs apply, the executor accepts, and membership takes effect after 24 hours.
 | 1 (default) | Karma: corporations hostile to, or at war with, the same corporation, and with no grudge between them, ally (up to six); later allies join the existing alliance |
 | 2 | Population: each empire's bot corporations band together at once, four per alliance |
 
+Unless the mode is 0, the first director pass after installing founds one
+alliance of two to four bot corporations (same empire first), whose members
+join at once instead of after 24 hours, so the world starts with an alliance.
 Automatic alliances take famous science-fiction names. The dashboard's
 **Alliances** page lists every plan and its progress, and sets up your own:
 name, ticker, description, founding corporation, allies and a logo (any

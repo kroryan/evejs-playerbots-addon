@@ -56,8 +56,18 @@ function world(overrides = {}) {
         applications.set(session.characterID, { state: 1 });
       },
     }),
-    allianceRegistry: () => ({ Handle_UpdateApplication: ([corporationID, , state], session) => calls.push(["accept", session.characterID, corporationID, state]) }),
-    applications: () => ({ getAllianceApplication: (allianceID, corporationID) => applications.get(corps.get(corporationID).ceoID) || null }),
+    allianceRegistry: () => ({ Handle_UpdateApplication: ([corporationID, , state], session) => {
+      calls.push(["accept", session.characterID, corporationID, state]);
+      applications.set(corps.get(corporationID).ceoID, { state: 2, corporationID, effectiveAtMs: Date.now() + 86_400_000 });
+    } }),
+    applications: () => ({
+      getAllianceApplication: (allianceID, corporationID) => applications.get(corps.get(corporationID).ceoID) || null,
+      buildEffectiveApplicationJob: (application) => ({ payload: application }),
+    }),
+    effective: () => ({ settleEffectiveApplication: async (job, options) => {
+      calls.push(["effective", job.payload.corporationID, Boolean(options.nowMs)]);
+      corps.get(job.payload.corporationID).allianceID = 99000001;
+    } }),
     images: () => ({ storeAllianceLogo: (id, bytes) => { calls.push(["logo", id, bytes.length]); return { success: true }; } }),
     formation: () => ({
       normalizeAllianceFormationOptions: (options) => options,
@@ -81,15 +91,29 @@ test("at population each empire's corporations band together", () => {
   assert.deepEqual(JSON.parse(JSON.stringify(runtime._testing.populationGroups(corps))), [[A, B]]);
 });
 
+test("the first run founds one alliance of two same-empire corps, whose ally joins at once", async () => {
+  const { runtime, calls, bots, corps } = world({ taken: ["Rebel Alliance"] });
+  await runtime.maintain(bots, { force: true });
+  const [design] = JSON.parse(JSON.stringify(runtime.getOverview())).designs;
+  assert.deepEqual([design.source, design.name, design.founder.corporationID], ["first-run", "Interstellar Alliance", A]);
+  assert.deepEqual(design.members.map((entry) => entry.corporationID), [B], "Charlie is of another empire");
+  assert.deepEqual(calls.map((call) => call[0]), ["skill", "grant", "create", "apply", "accept", "effective"]);
+  assert.equal(corps.get(B).allianceID, 99000001, "a member from the start");
+  assert.equal(design.status, "formed");
+  await runtime.maintain(bots, { force: true });
+  assert.equal(JSON.parse(JSON.stringify(runtime.getOverview())).designs.length, 1, "only once");
+});
+
 test("a karma alliance takes a science-fiction name, is founded by the biggest corp, and recruits its ally", async () => {
   const { runtime, calls, bots } = world({ feuds: [[A, ENEMY], [B, ENEMY]], taken: ["Rebel Alliance"] });
-  await runtime.maintain(bots, { force: true }); // plan and found
-  await runtime.maintain(bots, { force: true }); // the ally applies and is accepted
+  runtime._testing.deps.store = ((saved) => () => ({ read: () => saved, write() {} }))({ designs: [], firstAllianceDesignID: "existing" });
+  runtime._testing.reset();
+  await runtime.maintain(bots, { force: true }); // plan, found and recruit
   const overview = JSON.parse(JSON.stringify(runtime.getOverview()));
   const [design] = overview.designs;
   assert.equal(design.name, "Interstellar Alliance", "the first free famous name");
   assert.equal(design.founder.corporationID, A, "Alpha has more pilots");
-  assert.deepEqual(calls.filter((call) => call[0] !== "logo").map((call) => call[0]), ["skill", "grant", "create", "apply", "accept"]);
+  assert.deepEqual(calls.map((call) => call[0]), ["skill", "grant", "create", "apply", "accept"], "karma allies join after the usual 24 hours");
   assert.deepEqual(calls.find((call) => call[0] === "accept"), ["accept", 1, B, 2]);
 });
 

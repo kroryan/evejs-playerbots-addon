@@ -70,6 +70,7 @@ const deps = {
   corpRegistry: () => new (require("../corporation/corpRegistryRuntime"))(),
   allianceRegistry: () => new (require("../corporation/allianceRegistryRuntime"))(),
   applications: lazy("../corporation/allianceApplicationState"),
+  effective: lazy("../corporation/allianceApplicationEffectiveState"),
   founding: lazy("../corporation/allianceFoundingState"),
   formation: lazy("../corporation/allianceFormationEligibility"),
   images: lazy("../corporation/allianceImageStore"),
@@ -232,9 +233,58 @@ function designFor(corporationID) {
 
 // Turn coalitions into designs: join an existing bot alliance when one of
 // the group already has one, else found a new one led by the biggest corp.
+// On the first run, one alliance of at least two bot corporations is formed
+// straight away (members join at once instead of after 24 hours), so the
+// world starts with an alliance in it. Same-empire corporations first.
+function planFirstAlliance(corps) {
+  const data = load();
+  if (data.firstAllianceDesignID) return;
+  const allianceCounts = new Map();
+  for (const entry of corps.values()) {
+    if (entry.allianceID) allianceCounts.set(entry.allianceID, (allianceCounts.get(entry.allianceID) || 0) + 1);
+  }
+  if ([...allianceCounts.values()].some((count) => count >= 2)) {
+    data.firstAllianceDesignID = "existing";
+    return;
+  }
+  const free = [...corps.values()].filter((entry) => !entry.allianceID && entry.ceo && !designFor(entry.corporationID));
+  const byRace = new Map();
+  for (const entry of free) {
+    if (!byRace.has(entry.raceID)) byRace.set(entry.raceID, []);
+    byRace.get(entry.raceID).push(entry);
+  }
+  const bySize = (left, right) => right.members - left.members || left.corporationID - right.corporationID;
+  const sameRace = [...byRace.values()].filter((group) => group.length >= 2)
+    .sort((left, right) => right.length - left.length)[0];
+  const chosen = (sameRace || free).slice().sort(bySize).slice(0, POPULATION_GROUP);
+  if (chosen.length < 2) return;
+  const name = nextSciFiName();
+  if (!name) return;
+  const design = {
+    id: `first-${chosen[0].corporationID}`,
+    source: "first-run",
+    immediate: true,
+    name: name.name,
+    ticker: name.ticker,
+    description: "The first alliance of the bot corporations.",
+    url: "",
+    logo: "",
+    founderCorporationID: chosen[0].corporationID,
+    memberCorporationIDs: chosen.slice(1).map((entry) => entry.corporationID),
+    allianceID: 0,
+    status: "founding",
+    note: "",
+    createdAt: new Date().toISOString(),
+  };
+  data.designs.push(design);
+  data.firstAllianceDesignID = design.id;
+  info(`first alliance ${name.name} [${name.ticker}] planned for corporations ${chosen.map((entry) => entry.corporationID).join(", ")}.`);
+}
+
 function planAutomatic(corps) {
   const mode = allianceMode();
   if (mode === 0) return;
+  planFirstAlliance(corps);
   const groups = mode === 2 ? populationGroups(corps) : karmaCoalitions(corps);
   for (const group of groups) {
     const free = group.filter((id) => !designFor(id));
@@ -344,9 +394,22 @@ async function recruit(design, corps) {
       if (!application) {
         deps.corpRegistry().Handle_ApplyToJoinAlliance([design.allianceID, `${design.name} welcomes its allies.`], deps.space().getActorSession(member.ceo));
       }
-      const current = deps.applications().getAllianceApplication(design.allianceID, corporationID);
+      let current = deps.applications().getAllianceApplication(design.allianceID, corporationID);
       if (current && Number(current.state) === 1 && founder && founder.ceo) {
         deps.allianceRegistry().Handle_UpdateApplication([corporationID, "Accepted.", APPLICATION_ACCEPTED], deps.space().getActorSession(founder.ceo));
+        current = deps.applications().getAllianceApplication(design.allianceID, corporationID);
+      }
+      // The first alliance's members join at once rather than in 24 hours.
+      if (design.immediate && current && Number(current.state) === APPLICATION_ACCEPTED) {
+        const job = deps.applications().buildEffectiveApplicationJob(current);
+        if (job) {
+          await deps.effective().settleEffectiveApplication(job, { nowMs: Number(current.effectiveAtMs) || Date.now() });
+          const joined = corporation(corporationID);
+          if (joined && positive(joined.allianceID) === design.allianceID) {
+            missing -= 1;
+            info(`corporation ${corporationID} joined ${design.name}.`);
+          }
+        }
       }
     } catch (error) {
       design.note = `Application for ${corporationID}: ${String(error && (error.message || error)).slice(0, 140)}`;
@@ -367,7 +430,16 @@ async function maintain(bots = [], options = {}) {
       if (["done-failed", "formed"].includes(design.status) && design.logoAppliedTo === design.allianceID) continue;
       const founder = corps.get(design.founderCorporationID);
       if (!design.allianceID && founder && founder.allianceID) design.allianceID = founder.allianceID;
-      if (!design.allianceID) await found(design, corps);
+      if (!design.allianceID) {
+        await found(design, corps);
+        // Founding usually settles at once; recruit in the same pass.
+        const record = corporation(design.founderCorporationID);
+        if (record && positive(record.allianceID)) {
+          design.allianceID = positive(record.allianceID);
+          const founderEntry = corps.get(design.founderCorporationID);
+          if (founderEntry) founderEntry.allianceID = design.allianceID;
+        }
+      }
       if (design.allianceID) await recruit(design, corps);
     }
     save();
@@ -482,6 +554,7 @@ module.exports = {
     karmaCoalitions,
     populationGroups,
     planAutomatic,
+    planFirstAlliance,
     reset() { state = null; lastPassAtMs = 0; running = false; },
   },
 };

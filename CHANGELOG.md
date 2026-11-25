@@ -19,7 +19,11 @@ the Windows launcher package adds a fourth number for its own releases.
 - **Alliances page** on the dashboard: every plan with its logo, founder,
   allies and progress, and a form to set up your own: name (with
   suggestions), ticker, description, founder, allies and a logo picture.
-- Tested on the test server: in population mode two alliances were founded
+- **A first alliance on the first run.** Unless the mode is 0, the first
+  director pass founds one alliance of two to four bot corporations (same
+  empire first) whose members join at once instead of after 24 hours.
+- Tested on the test server: on the first pass Earth Alliance was founded with
+  two member corporations; in population mode two more alliances were founded
   within seconds of start-up.
 
 ## Unreleased: grievances, gate camps and wider trade

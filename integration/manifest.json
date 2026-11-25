@@ -484,8 +484,8 @@
     },
     "server/src/services/playerbots/playerBotAllianceFormationRuntime.js": {
       "baseSha256": null,
-      "sourceSha256": "f1de4be101d999154695892da60dd3f569433e8eec593ce196895fc3fb21b09b",
-      "overlaySha256": "f1de4be101d999154695892da60dd3f569433e8eec593ce196895fc3fb21b09b",
+      "sourceSha256": "53c3ca10217bd1d23d011e6a8cb8ce568749c7732363175f1a2e570fa4eff9c9",
+      "overlaySha256": "53c3ca10217bd1d23d011e6a8cb8ce568749c7732363175f1a2e570fa4eff9c9",
       "subsystem": "playerbots-core"
     },
     "server/src/services/playerbots/playerBotAllianceLogisticsRuntime.js": {
