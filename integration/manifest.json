@@ -508,8 +508,8 @@
     },
     "server/src/services/playerbots/playerBotColonyRuntime.js": {
       "baseSha256": null,
-      "sourceSha256": "af9516e3362ad322994f85d4d44235ba537d5d2a2da3f632f1e3500e1d90d6b5",
-      "overlaySha256": "af9516e3362ad322994f85d4d44235ba537d5d2a2da3f632f1e3500e1d90d6b5",
+      "sourceSha256": "93eadbe5c337edbbe7ed38ffff8531e6374fa6d06f1a14a7bcc128efc572245f",
+      "overlaySha256": "93eadbe5c337edbbe7ed38ffff8531e6374fa6d06f1a14a7bcc128efc572245f",
       "subsystem": "playerbots-core"
     },
     "server/src/services/playerbots/playerBotCombatDecisionRuntime.js": {
@@ -544,8 +544,8 @@
     },
     "server/src/services/playerbots/playerBotConfigurationRuntime.js": {
       "baseSha256": null,
-      "sourceSha256": "06bb31d27b1e6285c5d9b819f96e8a6479bc11e0bcbe7a913d0606422d2d45ea",
-      "overlaySha256": "06bb31d27b1e6285c5d9b819f96e8a6479bc11e0bcbe7a913d0606422d2d45ea",
+      "sourceSha256": "68ce94611a62573194505d259e017213b589c21e26a3143ec8c89b86f1e718f2",
+      "overlaySha256": "68ce94611a62573194505d259e017213b589c21e26a3143ec8c89b86f1e718f2",
       "subsystem": "playerbots-core"
     },
     "server/src/services/playerbots/playerBotConnectionScheduleRuntime.js": {
@@ -616,8 +616,8 @@
     },
     "server/src/services/playerbots/playerBotDirectorRuntime.js": {
       "baseSha256": null,
-      "sourceSha256": "ef9884bc531168b2fd9a1b40823742d1c29ba2b62861556ad0b3e5d4145b928c",
-      "overlaySha256": "ef9884bc531168b2fd9a1b40823742d1c29ba2b62861556ad0b3e5d4145b928c",
+      "sourceSha256": "c0491a1a3590c59f66c1115cfba542a3085f901ba4d7c4236f79501a267ff142",
+      "overlaySha256": "c0491a1a3590c59f66c1115cfba542a3085f901ba4d7c4236f79501a267ff142",
       "subsystem": "playerbots-core"
     },
     "server/src/services/playerbots/playerBotEconomyRuntime.js": {
@@ -760,8 +760,8 @@
     },
     "server/src/services/playerbots/playerBotOperationRuntime.js": {
       "baseSha256": null,
-      "sourceSha256": "a3a66dd31709a4a9e915f40e252cc7f4411c677da3f4912d5153b229ff43d042",
-      "overlaySha256": "a3a66dd31709a4a9e915f40e252cc7f4411c677da3f4912d5153b229ff43d042",
+      "sourceSha256": "4e29c96d78f098ca6d6a92a47f53597f875b6df9a8db8472ff3fd511a3910197",
+      "overlaySha256": "4e29c96d78f098ca6d6a92a47f53597f875b6df9a8db8472ff3fd511a3910197",
       "subsystem": "playerbots-core"
     },
     "server/src/services/playerbots/playerBotOpsSummary.js": {

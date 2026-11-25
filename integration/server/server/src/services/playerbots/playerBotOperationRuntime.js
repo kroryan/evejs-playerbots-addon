@@ -3464,7 +3464,7 @@ const COLONY_KIT = Object.freeze({
   finish: (operation, message) => finish(operation, message),
 });
 
-function startColony(botQuery) {
+function startColony(botQuery, planned = null) {
   const bot = getPlayerBots().resolveBot(botQuery);
   if (!bot) return { success: false, message: `No unique playerbot found for: ${botQuery}.` };
   const existing = getOperation(bot.characterID);
@@ -3495,7 +3495,20 @@ function startColony(botQuery) {
     return { success: false, message: `${bot.characterName} does not have the Command Center Upgrades skill required to establish a colony.` };
   }
   const operation = baseOperation("colony", bot, { stage: "to-jita", spent: 0, planetID: null, pins: 0 });
-  record(operation, "PI colony: buy a planet-specific Command Center in Jita and deploy the best supported P0-to-P1 or P0-to-P2 chain.");
+  if (planned) {
+    Object.assign(operation, planned.piPlan, {
+      stage: "planned-supply",
+      planetID: planned.planetID,
+      solarSystemID: planned.solarSystemID,
+      colonyStationID: planned.colonyStationID,
+      commandCenterUpgradeLevel: planned.commandCenterUpgradeLevel,
+      piPlan: planned.piPlan,
+      plannedSupply: planned.supply,
+    });
+  }
+  record(operation, planned
+    ? `PI colony planned for system ${planned.solarSystemID}; ${planned.supply.length} supply stop(s).`
+    : "PI colony: buy a planet-specific Command Center in Jita and deploy the best supported P0-to-P1 or P0-to-P2 chain.");
   saveOperation(operation);
   return { success: true, operation, message: `${bot.characterName} will establish the best supported P0-to-P1 or P0-to-P2 PI chain, then return to other work.` };
 }

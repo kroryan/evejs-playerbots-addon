@@ -426,6 +426,15 @@ function countColonyMarketArrivals(entries, botSystemIDs, jitaSystemID, humanCon
         ? Number(entry.work && entry.work.jitaStationID) || 0
         : 0;
     const currentSystemID = Number(botSystemIDs.get(characterID)) || 0;
+    if (Array.isArray(entry.work.plannedSupply)) {
+      const targets = [destinationStationID, ...entry.work.plannedSupply.map((leg) => leg.stationID),
+        entry.work.colonyStationID];
+      if (currentSystemID !== destinationSystemID && targets.some((stationID) =>
+        stationSystemID(stationID) === destinationSystemID)) {
+        arrivals.set(destinationSystemID, (arrivals.get(destinationSystemID) || 0) + 1);
+      }
+      continue;
+    }
     if (stage === "to-purchase-source" &&
         (!destinationStationID || stationSystemID(destinationStationID) !== destinationSystemID)) continue;
     if (!destinationStationID && !["to-jita", "return-to-jita"].includes(stage)) continue;
@@ -1728,6 +1737,15 @@ async function runDirectorInternal(bots = [], options = {}) {
   const miningIncomingBySystem = countMiningArrivals(
     listActiveWorkEntries(), botSystemIDs, humanControlledBotIDs,
   );
+  const colonyCoverageBySystem = new Map();
+  const colonyReservations = new Map();
+  for (const entry of activeWorkEntries) {
+    if (!isColonySetupEntry(entry)) continue;
+    const target = Number(entry.work.solarSystemID) || 0;
+    if (target) colonyReservations.set(target, (colonyReservations.get(target) || 0) + 1);
+  }
+  const colonySearchHops = require("./playerBotConfigurationRuntime").getSettings().colonySearchHops;
+
   let activeRelocations = countActiveCapacityRelocations(activeWorkEntries);
   let activeColonySetups = activeWorkEntries.filter((entry) =>
     entry.source === "operation" && entry.kind === "colony").length;
@@ -2094,29 +2112,33 @@ async function runDirectorInternal(bots = [], options = {}) {
         }
       }
     }
-    let reservedColonyDestinationSystemID = 0;
-    if (assignment && assignment.kind === "colony" && !humanControlled &&
-        jitaSystemID && jitaSystemID !== systemID) {
+    let colonyPlan = null;
+    let colonyQueueReason = null;
+    if (assignment && assignment.kind === "colony") {
       const residents = Number(rosterSystemCounts.get(jitaSystemID)) || 0;
-      const upgradeArrivals = Number(upgradeIncomingBySystem.get(jitaSystemID)) || 0;
-      const colonyArrivals = Number(colonyIncomingBySystem.get(jitaSystemID)) || 0;
-      const miningArrivals = Number(miningIncomingBySystem.get(jitaSystemID)) || 0;
-      const arrivals = upgradeArrivals + colonyArrivals + miningArrivals;
-      if (!canReserveSystemArrival(residents, arrivals, marketArrivalLimit(jitaSystemID, autonomousSystemLimit))) {
-        colonyMarketCapacityBlocked = { systemID: jitaSystemID, residents, arrivals };
-        queueColonySetupAssignment(
-          bot,
-          `Waiting for Jita system ${jitaSystemID} to free a slot (${residents} residents, ${arrivals} inbound; limit ${marketArrivalLimit(jitaSystemID, autonomousSystemLimit)}).`,
-          "jita-market-capacity",
-          now,
-        );
+      const arrivals = (Number(upgradeIncomingBySystem.get(jitaSystemID)) || 0) +
+        (Number(colonyIncomingBySystem.get(jitaSystemID)) || 0) +
+        (Number(miningIncomingBySystem.get(jitaSystemID)) || 0);
+      const limit = marketArrivalLimit(jitaSystemID, autonomousSystemLimit);
+      const allowJita = humanControlled || jitaSystemID === systemID || canReserveSystemArrival(residents, arrivals, limit);
+      colonyPlan = require("./playerBotColonyRuntime").planAutonomousColony(bot, {
+        systemID, maxHops: colonySearchHops, allowJita,
+        coverageBySystem: colonyCoverageBySystem, reservations: colonyReservations,
+      });
+      if (colonyPlan?.requiresJita && !allowJita) {
+        colonyMarketCapacityBlocked = true;
+        colonyQueueReason = `PI supplies require Jita; waiting for market capacity (${residents} residents, ${arrivals} inbound; limit ${limit}).`;
+      } else if (!colonyPlan) {
+        colonyQueueReason = `No suitable high-security PI site and affordable kit within ${colonySearchHops} jumps, including Jita seed supply.`;
+      }
+      if (colonyQueueReason) {
+        queueColonySetupAssignment(bot, colonyQueueReason,
+          colonyMarketCapacityBlocked ? "jita-market-capacity" : "colony-supply", now);
         assignment = chooseAssignment(bot, {
           prioritizeProductiveWork: needsMinimumProductiveWork,
           skipColony: true,
           allowTerritorialMining: true,
         });
-      } else {
-        reservedColonyDestinationSystemID = jitaSystemID;
       }
     }
     let reservedUpgradeDestinationSystemID = 0;
@@ -2150,15 +2172,13 @@ async function runDirectorInternal(bots = [], options = {}) {
     else {
       if (!assignment && isPiWorkCohort(bot, PI_SETUP_COHORT_SIZE) && needsColonySetup(bot)) {
         const limit = getMaxConcurrentColonySetups();
-        const reason = colonyMarketCapacityBlocked
-          ? `Waiting for Jita system ${colonyMarketCapacityBlocked.systemID} capacity (${colonyMarketCapacityBlocked.residents} residents, ${colonyMarketCapacityBlocked.arrivals} inbound; limit ${autonomousSystemLimit}).`
-          : upgradeMarketCapacityBlocked
+        const reason = colonyQueueReason || (upgradeMarketCapacityBlocked
             ? `Waiting for market system ${upgradeMarketCapacityBlocked.systemID} capacity (${upgradeMarketCapacityBlocked.residents} residents, ${upgradeMarketCapacityBlocked.arrivals} inbound; limit ${autonomousSystemLimit}); planetary setup is queued for the next available slot (${activeColonySetups}/${limit}).`
-            : `Waiting for one of ${limit} planetary setup slots; ${activeColonySetups} are in progress.`;
+            : `Waiting for one of ${limit} planetary setup slots; ${activeColonySetups} are in progress.`);
         queueColonySetupAssignment(
           bot,
           reason,
-          colonyMarketCapacityBlocked ? "jita-market-capacity" : "colony-setup-limit",
+          colonyMarketCapacityBlocked ? "jita-market-capacity" : colonyQueueReason ? "colony-supply" : "colony-setup-limit",
           now,
         );
       }
@@ -2227,7 +2247,7 @@ async function runDirectorInternal(bots = [], options = {}) {
       : assignment.kind === "pi-collect"
       ? require("./playerBotOperationRuntime").startPlanetaryCollection(bot.characterName)
       : assignment.kind === "colony"
-      ? require("./playerBotOperationRuntime").startColony(bot.characterName)
+      ? require("./playerBotOperationRuntime").startColony(bot.characterName, colonyPlan)
       : assignment.kind === "sell"
       ? assignment.corporateListing
         ? require("./playerBotIndustryCycleRuntime").startExpiredCorporateResale(bot.characterName)
@@ -2338,11 +2358,12 @@ async function runDirectorInternal(bots = [], options = {}) {
       else summary.active += 1;
       if (assignment.kind === "colony") activeColonySetups += 1;
       if (assignment.kind === "agent-mission") activeAgentMissions += 1;
-      if (assignment.kind === "colony" && reservedColonyDestinationSystemID) {
-        colonyIncomingBySystem.set(
-          reservedColonyDestinationSystemID,
-          (Number(colonyIncomingBySystem.get(reservedColonyDestinationSystemID)) || 0) + 1,
-        );
+      if (assignment.kind === "colony" && colonyPlan) {
+        const target = colonyPlan.solarSystemID;
+        colonyReservations.set(target, (colonyReservations.get(target) || 0) + 1);
+        if (colonyPlan.requiresJita && !humanControlled) {
+          colonyIncomingBySystem.set(jitaSystemID, (Number(colonyIncomingBySystem.get(jitaSystemID)) || 0) + 1);
+        }
       }
       if (assignment.kind === "upgrade" && reservedUpgradeDestinationSystemID) {
         upgradeIncomingBySystem.set(

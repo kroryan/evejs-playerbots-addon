@@ -389,7 +389,7 @@ function candidatePlanets(solarSystemID, characterID, options = {}) {
   const planetRuntime = getPlanetRuntime();
   const ownColonies = new Set(planetRuntime.listColoniesForCharacter(characterID)
     .map((colony) => Number(colony.planetID)));
-  const { planets, coverage } = getSystemColonyCoverage(solarSystemID);
+  const { planets, coverage } = options.systemCoverage || getSystemColonyCoverage(solarSystemID);
   return planets
     .filter((celestial) => !ownColonies.has(Number(celestial.itemID)) &&
       getNetworkPlan(celestial, coverage, options))
@@ -601,6 +601,147 @@ function saveColonyTarget(operation, bot, solarSystemID, kit, selectedPlanet = n
   return planet;
 }
 
+const nearbySystemsCache = new Map();
+
+function nearbyHighSecuritySystems(startSystemID, maxHops) {
+  const key = startSystemID + ":" + maxHops;
+  if (nearbySystemsCache.has(key)) return nearbySystemsCache.get(key);
+  const systems = new Map();
+  const visited = new Set([startSystemID]);
+  const queue = [{ systemID: startSystemID, hops: 0 }];
+  for (const { systemID, hops } of queue) {
+    const system = worldData.getSolarSystemByID(systemID);
+    if (!system) continue;
+    const security = Number(system.security ?? system.securityStatus ?? system.trueSecurity);
+    if (security >= 0.45) systems.set(systemID, hops);
+    else if (hops !== 0) continue;
+    if (hops >= maxHops) continue;
+    for (const gate of worldData.getStargatesForSystem(systemID)) {
+      const destination = Number(gate.destinationSolarSystemID ||
+        worldData.getStargateByID(gate.destinationID)?.solarSystemID) || 0;
+      if (!destination || visited.has(destination)) continue;
+      visited.add(destination);
+      queue.push({ systemID: destination, hops: hops + 1 });
+    }
+  }
+  nearbySystemsCache.set(key, systems);
+  return systems;
+}
+
+function compatibleColonyHaulers(bot, volume) {
+  const operations = require("./playerBotOperationRuntime");
+  const skillState = require("../skills/skillState");
+  const getSkillMap = skillState.getCachedCharacterSkillMap || skillState.getCharacterSkillMap;
+  const skills = getSkillMap(bot.characterID);
+  const registry = require("../inventory/itemTypeRegistry");
+  return HAULER_TYPE_IDS.filter((typeID) =>
+    Number(registry.resolveItemByTypeID(typeID)?.capacity) >= volume &&
+    operations.requiredSkillsForType(typeID).every(([skillID, level]) => {
+      const record = skills && (skills.get ? skills.get(skillID) : skills[skillID]);
+      return (Number(record?.trainedSkillLevel ?? record?.skillLevel) || 0) >= level;
+    }),
+  );
+}
+
+function planAutonomousColony(bot, options) {
+  const inventory = require("./playerBotInventoryRuntime");
+  const economy = require("./playerBotEconomyRuntime");
+  const registry = require("../inventory/itemTypeRegistry");
+  const character = require("../character/characterState").getCharacterRecord(bot.characterID) || {};
+  const currentStationID = Number(character.stationID) || 0;
+  const systems = nearbyHighSecuritySystems(options.systemID, options.maxHops);
+  const jitaSystemID = Number(economy.JITA_SYSTEM_ID);
+  const commandCenterUpgradeLevel = getCommandCenterUpgradeLevel(bot.characterID);
+  const freeCargo = inventory.getCargoBayFree(bot);
+  const sourcesByType = new Map();
+  function sourcesFor(typeID) {
+    if (sourcesByType.has(typeID)) return sourcesByType.get(typeID);
+    const owned = currentStationID && inventory.countHangar(bot, currentStationID, typeID)
+      ? [{ typeID, stationID: currentStationID, price: 0, jita: false }] : [];
+    const offers = economy.listSellOffers(typeID).map((offer) => ({
+      typeID,
+      stationID: Number(offer.stationID),
+      price: Number(offer.price),
+      quantity: Number(offer.quantity),
+      jita: economy.isJitaStation(offer.stationID) && options.systemID !== jitaSystemID,
+    })).filter((offer) => offer.price > 0 && offer.price <= MAX_KIT_SPEND && offer.quantity >= 1 &&
+      (economy.isJitaStation(offer.stationID) ||
+       systems.has(Number(worldData.getStationByID(offer.stationID)?.solarSystemID))));
+    offers.sort((left, right) => left.price - right.price ||
+      Number(right.stationID === currentStationID) - Number(left.stationID === currentStationID) ||
+      left.stationID - right.stationID);
+    const sources = [...owned, offers.find((offer) => !offer.jita), offers.find((offer) => offer.jita)].filter(Boolean);
+    sourcesByType.set(typeID, sources);
+    return sources;
+  }
+  const candidates = [];
+  for (const [systemID, hops] of systems) {
+    if (systemID === jitaSystemID && options.systemID !== jitaSystemID && !options.allowJita) continue;
+    const station = worldData.getStationByID(currentStationID);
+    const colonyStationID = Number(station?.solarSystemID) === systemID ? currentStationID
+      : Number(worldData.getStationsForSystem(systemID)?.[0]?.stationID) || 0;
+    if (!colonyStationID) continue;
+    let systemCoverage = options.coverageBySystem.get(systemID);
+    if (!systemCoverage) {
+      systemCoverage = getSystemColonyCoverage(systemID);
+      options.coverageBySystem.set(systemID, systemCoverage);
+    }
+    const load = [...systemCoverage.coverage.colonyCountsByPlanet.values()].reduce((sum, count) => sum + count, 0) +
+      (options.reservations.get(systemID) || 0);
+    candidates.push({ systemID, hops, colonyStationID, load, systemCoverage });
+  }
+  const tieBreak = (systemID) => Math.imul(systemID ^ Number(bot.characterID), 2654435761) >>> 0;
+  candidates.sort((left, right) => Number(left.systemID === jitaSystemID) - Number(right.systemID === jitaSystemID) ||
+    left.load - right.load || left.hops - right.hops || tieBreak(left.systemID) - tieBreak(right.systemID));
+
+  let fallback = null;
+  const kitsByCenter = new Map();
+  for (const candidate of candidates) {
+    const { systemID, colonyStationID, systemCoverage } = candidate;
+    const planets = candidatePlanets(systemID, bot.characterID, { commandCenterUpgradeLevel, systemCoverage });
+    for (const planet of planets) {
+      const typeID = getCommandCenterTypeID(planet.typeID);
+      if (!kitsByCenter.has(typeID)) {
+        const ownsCargo = inventory.countCargo(bot, typeID) > 0;
+        const volume = Number(registry.resolveItemByTypeID(typeID)?.volume) || 1000;
+        const haulers = ownsCargo || freeCargo >= volume ? [null]
+          : compatibleColonyHaulers(bot, volume).flatMap(sourcesFor);
+        const centers = ownsCargo ? [null] : sourcesFor(typeID);
+        const kits = [];
+        for (const hull of haulers) {
+          for (const center of centers) {
+            const legs = [hull, center].filter(Boolean);
+            const cost = legs.reduce((sum, leg) => sum + leg.price, 0);
+            if (cost <= MAX_KIT_SPEND) kits.push({ legs, cost, viaJita: legs.some((leg) => leg.jita) });
+          }
+        }
+        kits.sort((left, right) => Number(left.viaJita) - Number(right.viaJita) ||
+          left.cost - right.cost || left.legs.length - right.legs.length);
+        kitsByCenter.set(typeID, kits[0] || null);
+      }
+      const kit = kitsByCenter.get(typeID);
+      if (!kit) continue;
+      const requiresJita = kit.viaJita || (systemID === jitaSystemID && options.systemID !== jitaSystemID);
+      const plan = {
+        planetID: Number(planet.itemID), solarSystemID: systemID, colonyStationID, commandCenterUpgradeLevel,
+        piPlan: getNetworkPlan(planet, systemCoverage.coverage, { commandCenterUpgradeLevel }),
+        supply: kit.legs.map(({ typeID: itemTypeID, stationID }) => ({ typeID: itemTypeID, stationID })),
+        requiresJita,
+      };
+      if (!requiresJita) return plan;
+      if (!fallback) fallback = plan;
+    }
+  }
+  return fallback;
+}
+
+function advancePlannedColonySupply(operation) {
+  const next = operation.plannedSupply.shift();
+  operation.purchaseTypeID = next?.typeID || null;
+  operation.purchaseSourceStationID = next?.stationID || null;
+  operation.stage = next ? "to-purchase-source" : "to-colony-system";
+}
+
 async function selectStockedColonyTarget(operation, bot, kit, inventory, trade, jita) {
   const preferred = worldData.getCelestialByID(Number(operation.planetID));
   const jitaSystemID = Number(worldData.getStationByID(jita)?.solarSystemID);
@@ -765,6 +906,10 @@ async function advanceColony(operation, bot, kit) {
     }
     kit.save(operation);
   }
+  if (operation.stage === "planned-supply") {
+    advancePlannedColonySupply(operation);
+    kit.save(operation);
+  }
   if (operation.stage === "to-jita") {
     if (!Number(operation.planetID)) {
       const character = require("../character/characterState").getCharacterRecord(bot.characterID) || {};
@@ -799,50 +944,59 @@ async function advanceColony(operation, bot, kit) {
   if (operation.stage === "buy-at-source") {
     const sourceStationID = Number(operation.purchaseSourceStationID) || 0;
     const typeID = Number(operation.purchaseTypeID) || 0;
-    const quote = await trade.readQuote(bot.characterName, typeID);
-    if (!quote.success) {
-      return kit.block(operation, "holding", quote.message || `Could not query market stock for ${typeID} at ${sourceStationID}.`);
-    }
-    if (!quote.bestAsk) {
-      const nextSource = await trade.readBestAskOutsideJita(bot.characterName, typeID);
-      if (nextSource.success && nextSource.bestAsk && Number(nextSource.bestAsk.stationID) !== sourceStationID) {
-        operation.purchaseSourceStationID = Number(nextSource.bestAsk.stationID);
-        operation.stage = "to-purchase-source";
-      } else {
-        const economy = require("./playerBotEconomyRuntime");
-        const isJitaSource = typeof economy.isJitaStation === "function" && economy.isJitaStation(sourceStationID);
-        const nextJitaStationID = isJitaSource
-          ? Number(economy.findBestJitaSeedStation?.([{ typeID, quantity: 1 }], [sourceStationID])) || 0
-          : 0;
-        if (nextJitaStationID) {
-          operation.purchaseSourceStationID = nextJitaStationID;
-          operation.stage = "to-purchase-source";
-          kit.record(operation, `Jita station ${sourceStationID} is out of type ${typeID}; trying stocked Jita station ${nextJitaStationID}.`);
-        } else if (HAULER_TYPE_IDS.includes(typeID) || typeID === Number(operation.commandCenterTypeID)) {
-          operation.stage = "return-to-jita";
-        } else if (isJitaSource) {
-          return kit.block(operation, "holding", `No Jita seed station has a live sell order for type ${typeID}.`);
-        } else {
-          operation.purchaseSourceStationID = jita;
-          operation.stage = "return-to-jita";
-        }
+    const owned = operation.plannedSupply &&
+      (inventory.countHangar(bot, sourceStationID, typeID) ||
+       (typeID === Number(operation.commandCenterTypeID) && inventory.countCargo(bot, typeID)));
+    if (!owned) {
+      const quote = await trade.readQuote(bot.characterName, typeID);
+      if (!quote.success) {
+        return kit.block(operation, "holding", quote.message || `Could not query market stock for ${typeID} at ${sourceStationID}.`);
       }
+      if (!quote.bestAsk && operation.plannedSupply) {
+        return kit.block(operation, operation.spent || operation.previousShipID ? "holding" : "blocked",
+          `The planned PI supplier at station ${sourceStationID} ran out of type ${typeID}.`);
+      }
+      if (!quote.bestAsk) {
+        const nextSource = await trade.readBestAskOutsideJita(bot.characterName, typeID);
+        if (nextSource.success && nextSource.bestAsk && Number(nextSource.bestAsk.stationID) !== sourceStationID) {
+          operation.purchaseSourceStationID = Number(nextSource.bestAsk.stationID);
+          operation.stage = "to-purchase-source";
+        } else {
+          const economy = require("./playerBotEconomyRuntime");
+          const isJitaSource = typeof economy.isJitaStation === "function" && economy.isJitaStation(sourceStationID);
+          const nextJitaStationID = isJitaSource
+            ? Number(economy.findBestJitaSeedStation?.([{ typeID, quantity: 1 }], [sourceStationID])) || 0
+            : 0;
+          if (nextJitaStationID) {
+            operation.purchaseSourceStationID = nextJitaStationID;
+            operation.stage = "to-purchase-source";
+            kit.record(operation, `Jita station ${sourceStationID} is out of type ${typeID}; trying stocked Jita station ${nextJitaStationID}.`);
+          } else if (HAULER_TYPE_IDS.includes(typeID) || typeID === Number(operation.commandCenterTypeID)) {
+            operation.stage = "return-to-jita";
+          } else if (isJitaSource) {
+            return kit.block(operation, "holding", `No Jita seed station has a live sell order for type ${typeID}.`);
+          } else {
+            operation.purchaseSourceStationID = jita;
+            operation.stage = "return-to-jita";
+          }
+        }
+        kit.save(operation);
+        return { delayMs: 3000 };
+      }
+      if (Number(quote.bestAsk.price) > MAX_KIT_SPEND - (Number(operation.spent) || 0)) {
+        return kit.block(operation, "holding", "The planetary kit price exceeds the PI budget.");
+      }
+      operation.pending = capturePurchaseMarker(bot, inventory, typeID, sourceStationID);
       kit.save(operation);
-      return { delayMs: 3000 };
+      const bought = await buyOneWithQuoteRefresh(
+        trade, bot.characterName, typeID, quote.bestAsk.price,
+        MAX_KIT_SPEND - (Number(operation.spent) || 0),
+      );
+      if (!bought.success && !bought.outcomeUnknown) { operation.pending = null; kit.save(operation); }
+      if (!bought.success) return kit.block(operation, bought.outcomeUnknown ? "review" : "holding", bought.message);
+      operation.spent = Math.round(((Number(operation.spent) || 0) + Number(bought.spent || 0)) * 100) / 100;
+      operation.pending = null;
     }
-    if (Number(quote.bestAsk.price) > MAX_KIT_SPEND - (Number(operation.spent) || 0)) {
-      return kit.block(operation, "holding", "The planetary kit price exceeds the PI budget.");
-    }
-    operation.pending = capturePurchaseMarker(bot, inventory, typeID, sourceStationID);
-    kit.save(operation);
-    const bought = await buyOneWithQuoteRefresh(
-      trade, bot.characterName, typeID, quote.bestAsk.price,
-      MAX_KIT_SPEND - (Number(operation.spent) || 0),
-    );
-    if (!bought.success && !bought.outcomeUnknown) { operation.pending = null; kit.save(operation); }
-    if (!bought.success) return kit.block(operation, bought.outcomeUnknown ? "review" : "holding", bought.message);
-    operation.spent = Math.round(((Number(operation.spent) || 0) + Number(bought.spent || 0)) * 100) / 100;
-    operation.pending = null;
     const typeIsHauler = HAULER_TYPE_IDS.includes(typeID);
     if (typeIsHauler) {
       const hull = inventory.listHangar(bot, sourceStationID, typeID)[0];
@@ -851,7 +1005,7 @@ async function advanceColony(operation, bot, kit) {
       }
       const boarded = hull ? require("./playerBotOperationRuntime").boardShip(bot, hull) : { error: "the purchased hauler is missing from the hangar" };
       if (boarded.error) return kit.block(operation, "holding", `Could not board the hauler: ${boarded.error}.`);
-    } else {
+    } else if (!operation.plannedSupply || !inventory.countCargo(bot, typeID)) {
       const stack = inventory.listHangar(bot, sourceStationID, typeID)[0];
       if (!stack) return kit.block(operation, "review", "The purchased Command Center is missing from the source hangar.");
       const loaded = inventory.loadToCargo(bot, stack.itemID, 1);
@@ -860,7 +1014,8 @@ async function advanceColony(operation, bot, kit) {
     // A bought Command Center is already in cargo. It can be planted at the
     // assigned planet directly; only a hauler purchase still needs the next
     // kit purchase at Jita.
-    operation.stage = typeIsHauler ? "return-to-jita" : "to-colony-system";
+    if (operation.plannedSupply) advancePlannedColonySupply(operation);
+    else operation.stage = typeIsHauler ? "return-to-jita" : "to-colony-system";
     kit.save(operation);
     return { delayMs: 3000 };
   }
@@ -889,17 +1044,7 @@ async function advanceColony(operation, bot, kit) {
     if (!inventory.countCargo(bot, commandCenterTypeID) && inventory.getCargoBayFree(bot) < ccVolume) {
       // Too small a hold: buy (once) and board a hauler, keeping the old ship.
       const operations = require("./playerBotOperationRuntime");
-      const skillState = require("../skills/skillState");
-      const getSkillMap = skillState.getCachedCharacterSkillMap || skillState.getCharacterSkillMap;
-      const skills = getSkillMap(bot.characterID);
-      const registry = require("../inventory/itemTypeRegistry");
-      const compatibleTypes = HAULER_TYPE_IDS.filter((typeID) =>
-        Number(registry.resolveItemByTypeID(typeID)?.capacity) >= ccVolume &&
-        operations.requiredSkillsForType(typeID).every(([skillID, level]) => {
-          const record = skills && (skills.get ? skills.get(skillID) : skills[skillID]);
-          return (Number(record?.trainedSkillLevel ?? record?.skillLevel) || 0) >= level;
-        }),
-      );
+      const compatibleTypes = compatibleColonyHaulers(bot, ccVolume);
       let hull = compatibleTypes.map((typeID) => inventory.listHangar(bot, jita, typeID)[0]).find(Boolean);
       const budget = MAX_KIT_SPEND - (Number(operation.spent) || 0);
       let quoteError = "";
@@ -1153,5 +1298,6 @@ module.exports = {
   getCommandCenterTypeID,
   getNetworkPlan,
   hasColonySkill,
+  planAutonomousColony,
   _testing: { getSystemColonyCoverage, planForOperation, buyOneWithQuoteRefresh },
 };
