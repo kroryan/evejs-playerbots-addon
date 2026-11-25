@@ -212,7 +212,8 @@ test("the unchanged director makes the same six specialty decisions when only th
     "./playerBotCapacityRuntime": {},
     "./playerBotEconomyRuntime": { BOT_HUB_STATION_ID: 60000001 },
     "./playerBotOperationRuntime": { nextPlanetaryLaunch: () => null, getOperation: () => null,
-      findSellableGoodsStation: () => null, nextShipUpgrade: () => null, hasRoleShipFit: () => true },
+      // Every role's fit but a trade hauler: a trader without one still mines.
+      findSellableGoodsStation: () => null, nextShipUpgrade: () => null, hasRoleShipFit: (bot, role) => role !== "trade" },
     "./playerBotMiningEscortRuntime": { findPendingMiningEscortRequest: () => null },
     "./playerBotStructureRuntime": { findStructurePackage: () => null },
     "./playerBotWarMobilizationRuntime": { getActiveWarCombatAssignment: () => null, getCombatUpgradeSupport: () => null },

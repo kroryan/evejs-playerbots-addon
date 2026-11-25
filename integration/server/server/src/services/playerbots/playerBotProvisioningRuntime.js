@@ -4,7 +4,8 @@
 // starting capital grant so bots can run their trades from day one, and a
 // varied skill profile per specialty and per pilot instead of identical
 // sheets. Each grant is recorded per bot and never repeated. Capital ships
-// and their skills are deliberately absent.
+// and their skills are deliberately absent, except the freighters at the top
+// of a trader's hauler line.
 
 const { createTableRepository } = require("../../gameStore/tableRepository");
 const log = require("../../utils/logger");
@@ -12,8 +13,10 @@ const log = require("../../utils/logger");
 const TABLE = "playerBots";
 const PROVISIONING_PATH = "/_provisioning";
 // v16 also trains bot corporation founders for 300 member slots per shard.
-// The v3 random profile roll stays stable and migrations only raise skills.
-const SKILL_PROFILE_VERSION = 16;
+// v17 trains trade specialists to fly their race's hauler line up to the Jump
+// Freighter. The v3 random profile roll stays stable and migrations only
+// raise skills.
+const SKILL_PROFILE_VERSION = 17;
 const SKILL_PROFILE_ROLL_VERSION = 3;
 const DEFAULT_STARTING_CAPITAL = 1_000_000_000;
 const DEFAULT_OPENING_WALLET_BALANCE = 100_000;
@@ -167,6 +170,15 @@ function buildSkillProfile(bot) {
       // The runtime fit audit still blocks a rung when static Dogma is unavailable.
     }
   }
+  if (bot.specialty === "trade") {
+    try {
+      for (const [typeID, requiredLevel] of require("./playerBotOperationRuntime").getTradeLadderSkillRequirements(bot)) {
+        levels.set(Number(typeID), Math.max(Number(requiredLevel) || 1, levels.get(Number(typeID)) || 0));
+      }
+    } catch (_) {
+      // The upgrade path still checks skills before buying a hull.
+    }
+  }
   if (bot.specialty === "sovereignty") {
     levels.set(SKILL.gallenteFrigate, Math.max(1, levels.get(SKILL.gallenteFrigate) || 0));
     levels.set(SKILL.infomorphPsychology, Math.max(2, levels.get(SKILL.infomorphPsychology) || 0));
@@ -252,6 +264,31 @@ async function grantStartingCapital(bot, amount) {
   return Boolean(result && result.success);
 }
 
+// Traders fly Freighters and Jump Freighters, which cost up to about 11B ISK.
+// A trader with less than this is topped up once, as an operator grant.
+const DEFAULT_TRADER_CAPITAL = 20_000_000_000;
+
+function getConfiguredTraderCapital() {
+  const configured = Number(process.env.EVEJS_PLAYER_BOTS_TRADER_CAPITAL);
+  return Number.isFinite(configured) && configured >= 0 ? configured : DEFAULT_TRADER_CAPITAL;
+}
+
+async function grantTraderCapital(bot, target) {
+  const wallet = require("../account/walletState");
+  const balance = Number(wallet.getCharacterWallet(bot.characterID)?.balance) || 0;
+  const amount = Math.round((target - balance) * 100) / 100;
+  if (amount <= 0) return { granted: 0 };
+  const result = await wallet.adjustCharacterBalanceAsync(
+    bot.characterID,
+    amount,
+    // ownerID2 = the pilot: the profit ledger counts it as outside capital,
+    // so it is never shared with the corporation as profit.
+    { description: "Playerbot trader hauler capital (operator grant)", ownerID2: Number(bot.characterID) },
+    { source: "playerbot-trader-capital", idempotencyKey: `playerbots.trader-capital:${bot.characterID}` },
+  );
+  return result && result.success ? { granted: amount } : null;
+}
+
 function getConfiguredCapital() {
   const configured = Number(process.env.EVEJS_PLAYER_BOTS_STARTING_CAPITAL);
   return Number.isFinite(configured) && configured >= 0 ? configured : DEFAULT_STARTING_CAPITAL;
@@ -260,7 +297,8 @@ function getConfiguredCapital() {
 async function provisionRoster(bots = []) {
   const state = readState();
   const capital = getConfiguredCapital();
-  const summary = { capitalGrants: 0, skillProfiles: 0, skillsRaised: 0, corporationLimitsRaised: 0 };
+  const summary = { capitalGrants: 0, traderCapitalGrants: 0, skillProfiles: 0, skillsRaised: 0, corporationLimitsRaised: 0 };
+  const traderCapital = getConfiguredTraderCapital();
   let dirty = false;
   for (const bot of bots) {
     const key = String(bot.characterID);
@@ -288,6 +326,19 @@ async function provisionRoster(bots = []) {
       entry.startingWalletBalance = DEFAULT_OPENING_WALLET_BALANCE;
       dirty = true;
     }
+    if (bot.specialty === "trade" && traderCapital > 0 && !entry.traderCapitalAt) {
+      try {
+        const grant = await grantTraderCapital(bot, traderCapital);
+        if (grant) {
+          entry.traderCapital = grant.granted;
+          entry.traderCapitalAt = new Date().toISOString();
+          summary.traderCapitalGrants += grant.granted > 0 ? 1 : 0;
+          dirty = true;
+        }
+      } catch (error) {
+        log.warn(`[PlayerBots] Trader capital failed char=${bot.characterID}: ${error.message}`);
+      }
+    }
     if (Number(entry.skillProfileVersion) !== SKILL_PROFILE_VERSION) {
       try {
         summary.skillsRaised += applySkillProfile(bot);
@@ -307,7 +358,7 @@ async function provisionRoster(bots = []) {
   }
   if (dirty) {
     saveState(state);
-    log.info(`[PlayerBots] Provisioning: capital grants=${summary.capitalGrants} (${capital} ISK each), skill profiles=${summary.skillProfiles}, skills raised=${summary.skillsRaised}, corporation limits raised=${summary.corporationLimitsRaised}.`);
+    log.info(`[PlayerBots] Provisioning: capital grants=${summary.capitalGrants} (${capital} ISK each), trader top-ups=${summary.traderCapitalGrants}, skill profiles=${summary.skillProfiles}, skills raised=${summary.skillsRaised}, corporation limits raised=${summary.corporationLimitsRaised}.`);
   }
   return summary;
 }
@@ -315,6 +366,7 @@ async function provisionRoster(bots = []) {
 module.exports = {
   DEFAULT_OPENING_WALLET_BALANCE,
   DEFAULT_STARTING_CAPITAL,
+  DEFAULT_TRADER_CAPITAL,
   SKILL,
   buildSkillProfile,
   corporationMemberLimitFromSkills,

@@ -53,6 +53,7 @@ const KIND_LABELS = Object.freeze({
   "structure-deployment": "Deploying a structure",
   "structure-procurement": "Buying a structure",
   "structure-service-provision": "Supplying structure services",
+  "trade-run": "Running goods to the trade hub",
   "unload-package": "Unloading a package",
   "upgrade": "Upgrading ship",
 });
@@ -82,6 +83,7 @@ const STAGE_LABELS = Object.freeze({
   "interdiction-detour": "detouring around an interdiction",
   "interdiction-hold": "holding for an interdiction",
   "jita-run": "flying to Jita",
+  "list": "listing goods for sale",
   "load": "loading cargo",
   "manufacturing": "manufacturing",
   "market-sell": "selling on the market",

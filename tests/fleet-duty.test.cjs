@@ -96,6 +96,8 @@ function world(overrides = {}) {
       disbandFleet: (session, fleetID) => { fleets.delete(fleetID); log("disband", fleetID); },
     },
     "./playerBotConfigurationRuntime": { getSettings: () => ({ botFleetsEnabled: overrides.botFleets !== false, maxBotFleets: 5, botFleetSize: 5 }) },
+    "./playerBotTransportHulls": require("../integration/server/server/src/services/playerbots/playerBotTransportHulls"),
+    "./playerBotHomeBaseRuntime": { jumpsBetween: (from, to) => (Number(from) === Number(to) ? 0 : overrides.hops ?? 2) },
     "../corporation/corporationState": { getCorporationRecord: () => ({ tickerName: "ORE" }) },
     "./playerBotIndustryCycleRuntime": { getCycle: () => null },
     "./playerBotRuntime": {
@@ -630,6 +632,68 @@ test("a ratting bot forms a combat fleet with an idle corpmate docked in its sys
   const [fleet] = plain(w.runtime.getOverview()).fleets;
   assert.equal(fleet.doctrine.fleetType, "combat");
   assert.equal(fleet.botLed, true);
+});
+
+test("a trader setting off in a freighter takes combat corpmates along as an escort", () => {
+  const w = world({ roleFits: ["security"] });
+  w.fleets.clear();
+  for (const id of [BOT, BOT2]) w.bots.get(id).corporationID = 98000002;
+  w.bots.get(BOT).specialty = "trade";
+  w.characters.get(BOT).shipTypeID = 20185; // Charon
+  Object.assign(w.characters.get(BOT2), { solarSystemID: 30000144, stationID: 60003000 }); // docked two jumps away
+  w.operations.set(BOT, { operationID: "T1", kind: "trade-run", stage: "to-source", status: "active", autonomous: true, characterID: BOT, corporationID: 98000002 });
+  w.runtime.reconcile();
+  assert.deepEqual(w.names("createFleet").map((call) => call[1]), [BOT]);
+  assert.deepEqual(w.names("invite").map((call) => call[1]), [BOT2]);
+  const [fleet] = plain(w.runtime.getOverview()).fleets;
+  assert.equal(fleet.doctrine.fleetType, "escort");
+  assert.match(fleet.name, /'s escort fleet/);
+  assert.equal(w.runtime.isEnrolled(BOT2), true);
+
+  // The freighter waits up to five minutes for its escort to dock with it.
+  w.operations.set(BOT2, w.duty({ characterID: BOT2, commanderID: BOT, fleetType: "escort" }));
+  assert.equal(w.runtime.commanderShouldWait(BOT, "undock"), true);
+  const [entry] = w.runtime._testing.botFleets.values();
+  entry.waiting.sinceMs = Date.now() - 4 * 60 * 1000;
+  assert.equal(w.runtime.commanderShouldWait(BOT, "undock"), true, "still inside five minutes");
+  entry.waiting.sinceMs = Date.now() - 6 * 60 * 1000;
+  assert.equal(w.runtime.commanderShouldWait(BOT, "undock"), false, "it does not wait for ever");
+
+  // In space it waits in each system until the escort has caught up.
+  w.characters.get(BOT).stationID = 0;
+  assert.equal(w.runtime.commanderShouldWait(BOT, "jump", "30000142"), true);
+  entry.waiting.sinceMs = Date.now() - 2 * 60 * 1000;
+  assert.equal(w.runtime.commanderShouldWait(BOT, "jump", "30000142"), false);
+  assert.equal(w.runtime.commanderShouldWait(BOT, "jump", "30000143"), true, "a new system is a new wait");
+  w.characters.get(BOT2).solarSystemID = SYSTEM;
+  w.characters.get(BOT2).stationID = 0;
+  assert.equal(w.runtime.commanderShouldWait(BOT, "jump", "30000143"), false, "the escort is with it");
+
+  // The haul is over: the escort is released.
+  w.operations.get(BOT).status = "completed";
+  w.runtime.reconcile();
+  entry.workMissingSinceMs = Date.now() - 3 * 60 * 1000;
+  w.runtime.reconcile();
+  assert.equal(w.names("disband").length, 1);
+});
+
+test("only Freighters and Jump Freighters get an escort, and only from pilots in range", () => {
+  const small = world({ roleFits: ["security"] });
+  small.fleets.clear();
+  for (const id of [BOT, BOT2]) small.bots.get(id).corporationID = 98000002;
+  small.characters.get(BOT).shipTypeID = 12731; // Bustard
+  small.operations.set(BOT, { operationID: "T1", kind: "trade-run", stage: "to-source", status: "active", characterID: BOT, corporationID: 98000002 });
+  small.runtime.reconcile();
+  assert.equal(small.names("createFleet").length, 0, "a transport flies alone");
+
+  const far = world({ roleFits: ["security"], hops: 6 });
+  far.fleets.clear();
+  for (const id of [BOT, BOT2]) far.bots.get(id).corporationID = 98000002;
+  far.characters.get(BOT).shipTypeID = 28844; // Rhea
+  far.characters.get(BOT2).solarSystemID = 30000150;
+  far.operations.set(BOT, { operationID: "T1", kind: "fulfill", stage: "to-source", status: "active", characterID: BOT, corporationID: 98000002 });
+  far.runtime.reconcile();
+  assert.equal(far.names("createFleet").length, 0, "nobody within three jumps");
 });
 
 test("bot fleets stay off when the setting is off, and a lone miner forms none", () => {

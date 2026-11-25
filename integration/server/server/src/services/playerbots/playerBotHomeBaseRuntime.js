@@ -204,6 +204,7 @@ module.exports = {
   getHomeBase,
   homeMiningStation,
   homeRangeJumps,
+  jumpsBetween,
   searchOriginSystemID,
   _testing: {
     deps,

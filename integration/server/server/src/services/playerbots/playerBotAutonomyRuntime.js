@@ -336,6 +336,20 @@ async function ensurePendingNavigationTasks() {
   return { pending: tasks.length, scheduled };
 }
 
+const FLEET_WAIT_RETRY_MS = 3_000;
+
+function commanderWaitsForFleet(characterID) {
+  try {
+    const fleets = require("./playerBotFleetCommandRuntime");
+    const character = require("../character/characterState").getCharacterRecord(Number(characterID)) || {};
+    const docked = Number(character.stationID || character.structureID) > 0;
+    return fleets.commanderShouldWait(characterID, docked ? "undock" : "jump",
+      docked ? "" : String(Number(character.solarSystemID) || 0)) === true;
+  } catch (_) {
+    return false;
+  }
+}
+
 async function handleNavigationJob(job = {}) {
   const taskID = String(job && job.payload && job.payload.taskID || "").trim().toUpperCase();
   if (!taskID) return { processed: false, reason: "missing-task-id" };
@@ -348,6 +362,12 @@ async function handleNavigationJob(job = {}) {
   }
   if (!queuedTask || queuedTask.kind !== "playerbot.space.route" || queuedTask.status !== "queued") {
     return { processed: false, reason: "task-not-queued" };
+  }
+  // A bot fleet commander waits for its pilots before it undocks and in each
+  // system before it moves on, so a hauler never outruns its escort.
+  if (commanderWaitsForFleet(queuedTask.resourceOwnerCharacterID)) {
+    await scheduleNavigationTask(taskID, Date.now() + FLEET_WAIT_RETRY_MS);
+    return { processed: false, reason: "waiting-for-fleet" };
   }
   const assignment = tasks.claimNextTask({
     supportedKinds: ["playerbot.space.route"],

@@ -446,9 +446,16 @@ const BOT_FLEET_FORM_MS = 60_000;
 const BOT_FLEET_IDLE_END_MS = 2 * 60 * 1000;
 const BOT_FLEET_OFFLINE_END_MS = 5 * 60 * 1000;
 const BOT_FLEET_MAX_AGE_MS = 3 * 60 * 60 * 1000;
-const BOT_FLEET_COMMANDER_WORK = Object.freeze({ mining: "mine", combat: "combat" });
+const BOT_FLEET_COMMANDER_WORK = Object.freeze({
+  mining: new Set(["mine"]),
+  combat: new Set(["combat"]),
+  // A trader in a Freighter or Jump Freighter takes an escort on any haul.
+  escort: new Set(["trade-run", "fulfill", "sell", "haul", "alliance-courier"]),
+});
 const MINING_STAGES_TO_JOIN = new Set(["to-home", "undock", "to-belt", "mining"]);
 const COMBAT_STAGES_TO_JOIN = new Set(["to-home", "to-system", "undock"]);
+// Escorts come from corpmates up to this many jumps from the hauler.
+const ESCORT_RECRUIT_JUMPS = 3;
 const botFleets = new Map(); // fleetID -> { fleetID, commanderID, fleetType, name, corporationID, formedAtMs, ... }
 let lastBotFleetFormAtMs = 0;
 
@@ -517,6 +524,75 @@ function idleRecruits(fleetType, corporationID, systemID, taken) {
   return result;
 }
 
+function isSuperHauler(characterID) {
+  const character = deps.characters().getCharacterRecord(positive(characterID)) || {};
+  try {
+    return require("./playerBotTransportHulls").isSuperHauler(character.shipTypeID);
+  } catch {
+    return false;
+  }
+}
+
+function jumpsBetween(fromSystemID, toSystemID) {
+  try {
+    return require("./playerBotHomeBaseRuntime").jumpsBetween(fromSystemID, toSystemID);
+  } catch {
+    return positive(fromSystemID) && positive(fromSystemID) === positive(toSystemID) ? 0 : Infinity;
+  }
+}
+
+// Combat corpmates for a hauler's escort: pilots with no job docked within
+// range, and security pilots on their way to a patrol, who drop it.
+function escortRecruits(corporationID, systemID, taken) {
+  const operations = deps.operations();
+  const cycles = (() => { try { return require("./playerBotIndustryCycleRuntime"); } catch { return null; } })();
+  const idle = [];
+  const patrolling = [];
+  for (const bot of deps.playerBots().listBots()) {
+    const id = positive(bot.characterID);
+    if (taken.has(id) || positive(bot.corporationID) !== positive(corporationID) || !availableForFleet(bot)) continue;
+    if (!shipFitsJob(bot, "escort").ok) continue;
+    const character = deps.characters().getCharacterRecord(id) || {};
+    const hops = jumpsBetween(character.solarSystemID, systemID);
+    if (!Number.isFinite(hops) || hops > ESCORT_RECRUIT_JUMPS) continue;
+    const current = operations.getOperation(id);
+    const busy = current && (["active", "holding", "review"].includes(current.status) || current.pending);
+    if (busy) {
+      if (current.kind === "combat" && current.mode === "security" && current.status === "active" &&
+          !current.miningEscortForCharacterID && !current.defensiveTargetID && COMBAT_STAGES_TO_JOIN.has(current.stage)) {
+        patrolling.push({ bot, stop: true, hops });
+      }
+      continue;
+    }
+    const cycle = cycles && cycles.getCycle ? cycles.getCycle(id) : null;
+    if (cycle && (["active", "holding"].includes(cycle.status) || cycle.pending)) continue;
+    if (!positive(character.stationID || character.structureID)) continue;
+    idle.push({ bot, stop: false, hops });
+  }
+  const nearest = (left, right) => left.hops - right.hops;
+  return [...idle.sort(nearest), ...patrolling.sort(nearest)].map(({ bot, stop }) => ({ bot, stop }));
+}
+
+// A docked trader in a super hauler, setting off on a haul, leads an escort.
+function formEscortFleets(active, taken, settings) {
+  for (const operation of active) {
+    if (botFleets.size >= settings.maxFleets) return;
+    if (!operation || operation.status !== "active" || !BOT_FLEET_COMMANDER_WORK.escort.has(operation.kind)) continue;
+    const corporationID = positive(operation.corporationID);
+    const commanderID = positive(operation.characterID);
+    if (!corporationID || taken.has(commanderID) || !isSuperHauler(commanderID)) continue;
+    const character = deps.characters().getCharacterRecord(commanderID) || {};
+    if (!positive(character.stationID || character.structureID)) continue;
+    const bot = getBot(commanderID);
+    if (!bot || !availableForFleet(bot)) continue;
+    taken.add(commanderID);
+    const chosen = escortRecruits(corporationID, positive(character.solarSystemID), taken).slice(0, settings.size - 1);
+    if (!chosen.length) continue;
+    for (const entry of chosen) taken.add(positive(entry.bot.characterID));
+    formBotFleet({ fleetType: "escort", corporationID, place: positive(character.solarSystemID) }, bot, chosen);
+  }
+}
+
 function formBotFleets() {
   const settings = botFleetSettings();
   if (!settings.enabled || !settings.autowork || botFleets.size >= settings.maxFleets) return;
@@ -545,6 +621,7 @@ function formBotFleets() {
     if (!groups.has(key)) groups.set(key, { fleetType, corporationID: positive(operation.corporationID), place, pilots: [] });
     groups.get(key).pilots.push({ bot, operation });
   }
+  formEscortFleets(active, taken, settings);
   for (const group of groups.values()) {
     if (botFleets.size >= settings.maxFleets) break;
     // The pilot with the biggest hold leads a mining fleet; the longest at
@@ -693,7 +770,7 @@ function maintainBotFleets() {
       continue;
     }
     const work = operations.getOperation(entry.commanderID);
-    const working = work && work.kind === BOT_FLEET_COMMANDER_WORK[entry.fleetType] && ["active", "holding"].includes(work.status);
+    const working = work && BOT_FLEET_COMMANDER_WORK[entry.fleetType]?.has(work.kind) && ["active", "holding"].includes(work.status);
     entry.workMissingSinceMs = working ? 0 : entry.workMissingSinceMs || now;
     const online = isConnected(entry.commanderID);
     entry.offlineSinceMs = online ? 0 : entry.offlineSinceMs || now;
@@ -701,7 +778,8 @@ function maintainBotFleets() {
       disbandBotFleet(entry, "the commander's job ended");
     } else if (entry.offlineSinceMs && now - entry.offlineSinceMs > BOT_FLEET_OFFLINE_END_MS) {
       disbandBotFleet(entry, "the commander went offline");
-    } else if (now - entry.formedAtMs > BOT_FLEET_MAX_AGE_MS && (!work || work.stage === "to-home" || work.stage === "unload")) {
+    } else if (now - entry.formedAtMs > BOT_FLEET_MAX_AGE_MS &&
+        (!work || work.stage === "to-home" || work.stage === "unload" || entry.fleetType === "escort")) {
       disbandBotFleet(entry, "the fleet has flown for three hours");
     }
   }
@@ -711,13 +789,17 @@ function maintainBotFleets() {
   }
 }
 
-// A bot commander about to undock or warp off waits a short while for its
-// pilots: until they are docked with it, or undocked in its system. It does
-// not wait twice for the same move.
-const COMMANDER_WAIT_MS = Object.freeze({ undock: 2 * 60 * 1000, warp: 60 * 1000 });
-function commanderShouldWait(commanderID, phase) {
+// A bot commander about to undock, warp off or take the next gate waits a
+// short while for its pilots: until they are docked with it, or undocked in
+// its system. It does not wait twice for the same move; key tells moves of the
+// same phase apart (the system a jump is taken from). A hauler waits longer
+// for its escort to come in from nearby systems before it undocks.
+const COMMANDER_WAIT_MS = Object.freeze({ undock: 2 * 60 * 1000, warp: 60 * 1000, jump: 60 * 1000 });
+const ESCORT_WAIT_MS = Object.freeze({ undock: 5 * 60 * 1000, warp: 60 * 1000, jump: 90 * 1000 });
+function commanderShouldWait(commanderID, phase, key = "") {
   const entry = botFleetForCommander(commanderID);
-  if (!entry || !COMMANDER_WAIT_MS[phase]) return false;
+  const limits = entry && entry.fleetType === "escort" ? ESCORT_WAIT_MS : COMMANDER_WAIT_MS;
+  if (!entry || !limits[phase]) return false;
   const fleet = deps.fleetRuntime().getFleetByID(entry.fleetID);
   if (!fleet) return false;
   const commander = deps.characters().getCharacterRecord(positive(commanderID)) || {};
@@ -739,8 +821,9 @@ function commanderShouldWait(commanderID, phase) {
     entry.waiting = null;
     return false;
   }
-  if (!entry.waiting || entry.waiting.phase !== phase) entry.waiting = { phase, sinceMs: now };
-  return now - entry.waiting.sinceMs <= COMMANDER_WAIT_MS[phase];
+  const move = `${phase}:${key}`;
+  if (!entry.waiting || entry.waiting.move !== move) entry.waiting = { phase, move, sinceMs: now };
+  return now - entry.waiting.sinceMs <= limits[phase];
 }
 
 function leaveBotFleet(entry, characterID, reason) {
@@ -2026,6 +2109,8 @@ module.exports = {
   shipFitsJob,
   _testing: {
     botFleets,
+    escortRecruits,
+    formBotFleets,
     maintainBotFleets,
     chooseTarget,
     commanderOfFleet,

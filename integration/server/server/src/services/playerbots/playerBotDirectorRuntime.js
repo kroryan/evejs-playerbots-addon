@@ -476,7 +476,7 @@ function clearColonySetupAssignment(characterID) {
 
 function isProductiveWorkEntry(entry) {
   return entry.source === "cycle" ||
-    ["mine", "sell", "haul", "fulfill", "pi-collect", "combat", "sovereignty", "alliance-courier", "structure-procurement", "structure-deployment", "structure-core-install", "structure-service-provision"]
+    ["mine", "sell", "haul", "fulfill", "trade-run", "pi-collect", "combat", "sovereignty", "alliance-courier", "structure-procurement", "structure-deployment", "structure-core-install", "structure-service-provision"]
       .includes(entry.kind);
 }
 
@@ -1178,6 +1178,32 @@ function findCoreInstallPlan(structureRuntime, bot) {
     : null;
 }
 
+// A trader's next job: a better hauler when it can afford one, else a trade
+// run when its hub needs stock. null keeps a hauler pilot docked (it never
+// swaps to a mining ship); undefined means it has no hauler yet.
+const TRADE_RUN_COOLDOWN_MS = 30 * 60 * 1000;
+function chooseTradeAssignment(bot, options, balance, operations) {
+  const upgrade = typeof operations.nextShipUpgrade === "function" ? operations.nextShipUpgrade(bot, "trade") : null;
+  const lastOperation = typeof operations.getOperation === "function" ? operations.getOperation(bot.characterID) : null;
+  if (options.skipUpgrade !== true && upgrade && balance >= Number(upgrade.minBalance) &&
+      !upgradeCoolingDown(lastOperation)) {
+    return {
+      kind: "upgrade",
+      role: "trade",
+      marketStationID: typeof operations.findUpgradeMarketStation === "function"
+        ? operations.findUpgradeMarketStation(bot, upgrade)
+        : hubStationFor(bot),
+    };
+  }
+  if (typeof operations.hasRoleShipFit !== "function" || !operations.hasRoleShipFit(bot, "trade")) return undefined;
+  const ranRecently = lastOperation && lastOperation.kind === "trade-run" &&
+    Date.now() - (Date.parse(lastOperation.updatedAt || lastOperation.createdAt || "") || 0) < TRADE_RUN_COOLDOWN_MS;
+  if (ranRecently) return null;
+  let plan = null;
+  try { plan = require("./playerBotTradeRunRuntime").planTradeRun(bot); } catch (_) { plan = null; }
+  return plan ? { kind: "trade-run", plan } : null;
+}
+
 function chooseMiningAssignment(bot, options = {}) {
   const operations = require("./playerBotOperationRuntime");
   const hasMiningFit = typeof operations.hasRoleShipFit === "function" &&
@@ -1436,6 +1462,12 @@ function chooseAssignment(bot, options = {}) {
     return { kind: "industry", runs: INDUSTRY_MAX_RUNS, maxSpend,
       ...(facility ? { facilityID: facility.facilityID } : {}) };
   }
+  // Traders climb the hauler ladder and run goods to their hub; until they
+  // own a hauler they work like everyone else.
+  if (bot.specialty === "trade") {
+    const tradeAssignment = chooseTradeAssignment(bot, options, balance, operations);
+    if (tradeAssignment !== undefined) return tradeAssignment;
+  }
   // Complete a mining assignment after fitting its ship before reconsidering a combat hull.
   if (options.prioritizeProductiveWork === true ||
       (lastOperation?.kind === "upgrade" && lastOperation.role === "mining" &&
@@ -1522,7 +1554,7 @@ function countProductiveBots(corporationID) {
 function getProductiveBotCountsByCorporation(corporationIDs, entries = listActiveWorkEntries()) {
   const productive = new Map([...corporationIDs].map((id) => [Number(id), new Set()]));
   const productiveKinds = new Set([
-    "mine", "sell", "haul", "fulfill", "pi-collect", "combat", "agent-mission", "sovereignty",
+    "mine", "sell", "haul", "fulfill", "trade-run", "pi-collect", "combat", "agent-mission", "sovereignty",
     "alliance-courier", "structure-procurement", "structure-deployment",
     "structure-core-install", "structure-service-provision",
   ]);
@@ -1540,14 +1572,14 @@ function getProductiveBotCountsByCorporation(corporationIDs, entries = listActiv
 
 function isProductiveAssignment(assignment) {
   return assignment.headquarters === true || assignment.headquartersStructureUpgrade === true ||
-    ["mine", "industry", "sell", "haul", "fulfill", "pi-collect", "combat", "sovereignty",
+    ["mine", "industry", "sell", "haul", "fulfill", "trade-run", "pi-collect", "combat", "sovereignty",
       "alliance-courier", "alliance-founding", "structure-procurement", "structure-deployment", "structure-core-install", "structure-service-provision", "order-build", "order-courier"]
       .includes(assignment.kind);
 }
 
 async function runDirectorInternal(bots = [], options = {}) {
   const summary = { enabled: isEnabled(), active: 0, assigned: 0, mine: 0, industry: 0, upgrade: 0,
-    sell: 0, "order-courier": 0, "order-build": 0, "alliance-courier": 0, "structure-procurement": 0, "structure-deployment": 0, "structure-core-install": 0, "structure-service-provision": 0, colony: 0,
+    sell: 0, "trade-run": 0, "order-courier": 0, "order-build": 0, "alliance-courier": 0, "structure-procurement": 0, "structure-deployment": 0, "structure-core-install": 0, "structure-service-provision": 0, colony: 0,
     "alliance-founding": 0, combat: 0, "agent-mission": 0, sovereignty: 0, relocate: 0, activeRelocations: 0,
     recoveredColonyReviews: 0, recoveredLegacyPIExports: 0, capsuleRecoveries: 0, structureConflictWarsDeclared: 0,
     firstWarGrants: 0, warShipBudgetsFunded: 0, warPilotsRecruited: 0, failures: 0 };
@@ -2258,6 +2290,8 @@ async function runDirectorInternal(bots = [], options = {}) {
           } : {}) })
       : assignment.kind === "agent-mission"
       ? operationRuntime.startAgentMission(bot.characterName, assignment.plan)
+      : assignment.kind === "trade-run"
+      ? operationRuntime.startTradeRun(bot.characterName, assignment.plan)
       : assignment.kind === "combat"
       ? require("./playerBotOperationRuntime").startCombat(bot.characterName, assignment.mode, {
         autonomous: true,

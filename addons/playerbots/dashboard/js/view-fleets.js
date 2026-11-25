@@ -70,7 +70,7 @@ function dutyCell(member, fleet) {
 function workLabel(text) {
   const match = /^([a-z-]+) \(([^)]*)\)$/.exec(String(text || ""));
   if (!match) return text || "Its own work";
-  const kinds = { mine: "Mining trip", combat: "Ratting", "fleet-duty": "Fleet duty" };
+  const kinds = { mine: "Mining trip", combat: "Ratting", "fleet-duty": "Fleet duty", "trade-run": "Trade run", fulfill: "Delivering an order", sell: "Selling goods", haul: "Hauling", "alliance-courier": "Courier contract" };
   return `${kinds[match[1]] || match[1]}: ${match[2].replace(/-/g, " ")}`;
 }
 
@@ -164,7 +164,9 @@ function botFleetPanel(fleet) {
         <span class="sub">${esc(fleet.name)} · ${place}${commander.shipTypeName ? ` · ${esc(commander.shipTypeName)}` : ""}</span></span></div>
       <div class="fleet-head-side"><span class="pill">${icon(TYPE_ICONS[fleet.doctrine.fleetType] || "fleet", { size: 14 })}${esc(type ? type.label : "Fleet")}</span>${hangarHtml(commander)}<span class="pill">${icon("users", { size: 14 })}${num(fleet.botCount)} bots</span></div>
     </div>
-    <div class="panel-body">${notice(`The bots formed this fleet themselves${fleet.formedAt ? ` ${esc(rel(fleet.formedAt))}` : ""}. Its commander does its own ${esc(type ? type.label.toLowerCase() : "")} work and its corpmates fly with it. You can watch it, but not change it; it breaks up when the commander's job ends.`, "info", "fleet-note")}</div>
+    <div class="panel-body">${notice(`The bots formed this fleet themselves${fleet.formedAt ? ` ${esc(rel(fleet.formedAt))}` : ""}. ${fleet.doctrine.fleetType === "escort"
+      ? "Its commander is hauling in a freighter and its combat corpmates escort it, waiting for each other at every undock and gate."
+      : `Its commander does its own ${esc(type ? type.label.toLowerCase() : "")} work and its corpmates fly with it.`} You can watch it, but not change it; it breaks up when the commander's job ends.`, "info", "fleet-note")}</div>
     <div class="table-wrap"><table class="fleet-members">
       <thead><tr><th>Pilot</th><th>Ship</th><th>Where</th><th>Fleet duty</th></tr></thead>
       <tbody id="fleet-members">${memberRows(fleet)}</tbody>

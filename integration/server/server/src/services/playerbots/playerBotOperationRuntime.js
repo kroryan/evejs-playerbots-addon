@@ -737,6 +737,8 @@ async function travelToStation(operation, bot, stationID, store = OPERATION_STOR
   }
   const space = getSpace();
   if (dockedStationID) {
+    // A bot fleet commander (a hauler and its escort, say) waits for its pilots.
+    if (fleetCommanderShouldWait(bot.characterID, "undock")) return { delayMs: TRAVEL_DELAY_MS };
     const result = space.undock(bot, { allowOverCapacityDeparture: true });
     if (!result.success) return result.capacityQueued
       ? { delayMs: TRAVEL_DELAY_MS, capacityQueued: true, capacityReason: result.message }
@@ -1662,7 +1664,47 @@ const SHIP_LADDER = Object.freeze({
     // still verifies the live hold before the package is loaded.
     { name: "Tayra structure hauler", hullTypeID: 649, moduleTypeIDs: [1319, 1319, 1319, 1319], minBalance: 25_000_000 },
   ],
+  // Traders climb their own race's hauler line to the end of the tree: the
+  // biggest T1 industrial, a Deep Space Transport, a Freighter, then a Jump
+  // Freighter. nextShipUpgrade keeps each trader on its own race's rungs.
+  // Freighters and Jump Freighters fly with an escort fleet
+  // (playerBotFleetCommandRuntime.js).
+  trade: [
+    { name: "Tayra trade hauler", raceID: 1, tier: 1, hullTypeID: 649, moduleTypeIDs: [1319, 1319, 1319, 1319], minBalance: 10_000_000 },
+    { name: "Mammoth trade hauler", raceID: 2, tier: 1, hullTypeID: 652, moduleTypeIDs: [1319, 1319, 1319, 1319, 1319], minBalance: 10_000_000 },
+    { name: "Bestower trade hauler", raceID: 4, tier: 1, hullTypeID: 1944, moduleTypeIDs: [1319, 1319, 1319, 1319, 1319, 1319], minBalance: 10_000_000 },
+    { name: "Iteron Mark V trade hauler", raceID: 8, tier: 1, hullTypeID: 657, moduleTypeIDs: [1319, 1319, 1319, 1319, 1319], minBalance: 10_000_000 },
+    { name: "Bustard deep space transport", raceID: 1, tier: 2, hullTypeID: 12731, moduleTypeIDs: [], minBalance: 250_000_000 },
+    { name: "Mastodon deep space transport", raceID: 2, tier: 2, hullTypeID: 12747, moduleTypeIDs: [], minBalance: 250_000_000 },
+    { name: "Impel deep space transport", raceID: 4, tier: 2, hullTypeID: 12753, moduleTypeIDs: [], minBalance: 250_000_000 },
+    { name: "Occator deep space transport", raceID: 8, tier: 2, hullTypeID: 12745, moduleTypeIDs: [], minBalance: 250_000_000 },
+    { name: "Charon freighter", raceID: 1, tier: 3, hullTypeID: 20185, moduleTypeIDs: [], minBalance: 2_500_000_000 },
+    { name: "Fenrir freighter", raceID: 2, tier: 3, hullTypeID: 20189, moduleTypeIDs: [], minBalance: 2_500_000_000 },
+    { name: "Providence freighter", raceID: 4, tier: 3, hullTypeID: 20183, moduleTypeIDs: [], minBalance: 2_500_000_000 },
+    { name: "Obelisk freighter", raceID: 8, tier: 3, hullTypeID: 20187, moduleTypeIDs: [], minBalance: 2_500_000_000 },
+    { name: "Rhea jump freighter", raceID: 1, tier: 4, hullTypeID: 28844, moduleTypeIDs: [], minBalance: 12_000_000_000 },
+    { name: "Nomad jump freighter", raceID: 2, tier: 4, hullTypeID: 28846, moduleTypeIDs: [], minBalance: 13_000_000_000 },
+    { name: "Ark jump freighter", raceID: 4, tier: 4, hullTypeID: 28850, moduleTypeIDs: [], minBalance: 14_000_000_000 },
+    { name: "Anshar jump freighter", raceID: 8, tier: 4, hullTypeID: 28848, moduleTypeIDs: [], minBalance: 12_000_000_000 },
+  ],
 });
+
+const TRADE_RACES = new Set([1, 2, 4, 8]);
+
+// A trader's race picks its hauler line; anyone else, Caldari.
+function botRaceID(bot) {
+  const character = getCharacterRecord(bot && bot.characterID) || {};
+  const raceID = normalizePositiveInteger(bot && bot.raceID) || normalizePositiveInteger(character.raceID);
+  return TRADE_RACES.has(raceID) ? raceID : 1;
+}
+
+// The rungs a pilot climbs for a role: the trade line is one race's haulers.
+function roleLadder(role, bot) {
+  const rungs = (SHIP_LADDER[role] || []).map(resolveShipLadderRung).filter(Boolean);
+  if (role !== "trade") return rungs;
+  const raceID = botRaceID(bot);
+  return rungs.filter((rung) => Number(rung.raceID) === raceID).sort((left, right) => left.tier - right.tier);
+}
 
 function resolveLadderTypeID(value) {
   const numeric = Number(value);
@@ -1731,6 +1773,43 @@ function getShipRungSkillRequirements(role, hullTypeID) {
   return [...requirements.entries()];
 }
 
+// Every skill a trader needs to fly and fit its own race's whole hauler line,
+// with each skill's own prerequisites, so the character sheet is consistent.
+function getTradeLadderSkillRequirements(bot) {
+  const requirements = new Map();
+  const queue = [];
+  const need = (skillTypeID, level) => {
+    if ((requirements.get(skillTypeID) || 0) >= level) return;
+    requirements.set(skillTypeID, level);
+    queue.push(skillTypeID);
+  };
+  for (const rung of roleLadder("trade", bot)) {
+    for (const typeID of [rung.hullTypeID, ...(rung.moduleTypeIDs || [])]) {
+      for (const [skillTypeID, level] of requiredSkillsForType(typeID)) need(skillTypeID, level);
+    }
+  }
+  for (let guard = 0; queue.length && guard < 500; guard += 1) {
+    for (const [skillTypeID, level] of requiredSkillsForType(queue.shift())) need(skillTypeID, level);
+  }
+  return [...requirements.entries()];
+}
+
+// The modules, drones and cargo bot pilots buy for the ladder fits, with how
+// many of each one fit uses. Ships are left out: hulls are not imported.
+function listShipLadderItemDemand() {
+  const demand = new Map();
+  for (const rungs of Object.values(SHIP_LADDER)) {
+    for (const rung of rungs.map(resolveShipLadderRung).filter(Boolean)) {
+      const counts = new Map();
+      for (const typeID of [...(rung.moduleTypeIDs || []), ...(rung.droneTypeIDs || []), ...(rung.cargoTypeIDs || [])]) {
+        counts.set(Number(typeID), (counts.get(Number(typeID)) || 0) + 1);
+      }
+      for (const [typeID, count] of counts) demand.set(typeID, Math.max(demand.get(typeID) || 0, count));
+    }
+  }
+  return [...demand].map(([typeID, perFit]) => ({ typeID, perFit }));
+}
+
 function canUseRung(bot, rung) {
   return [rung.hullTypeID, ...(rung.moduleTypeIDs || []), ...(rung.droneTypeIDs || []), ...(rung.fighterTypeIDs || [])]
     .every((typeID) => hasSkills(bot, requiredSkillsForType(typeID)));
@@ -1766,9 +1845,15 @@ function selectBootstrapRung(role, currentIndex, balance, ladder = SHIP_LADDER[r
 function nextShipUpgrade(bot, role = "mining", options = {}) {
   const character = getCharacterRecord(bot.characterID) || {};
   const currentHull = Number(character.shipTypeID) || 0;
-  const ladder = (SHIP_LADDER[role] || []).map(resolveShipLadderRung).filter(Boolean);
-  const currentIndex = ladder.findIndex((rung) => rung.hullTypeID === currentHull);
-  const currentRung = currentIndex >= 0 ? ladder[currentIndex] : null;
+  const ladder = roleLadder(role, bot);
+  let currentIndex = ladder.findIndex((rung) => rung.hullTypeID === currentHull);
+  // A trader in another race's hauler climbs from that hauler's tier.
+  if (role === "trade" && currentIndex < 0) {
+    const flown = (SHIP_LADDER.trade || []).map(resolveShipLadderRung).filter(Boolean)
+      .find((rung) => rung.hullTypeID === currentHull);
+    if (flown) currentIndex = ladder.findIndex((rung) => rung.tier === flown.tier);
+  }
+  const currentRung = currentIndex >= 0 && ladder[currentIndex].hullTypeID === currentHull ? ladder[currentIndex] : null;
   if (currentRung && ((currentRung.moduleTypeIDs || []).length || (currentRung.droneTypeIDs || []).length || (currentRung.cargoTypeIDs || []).length)) {
     const itemStore = require("../inventory/itemStore");
     const shipID = Number(character.shipID) || 0;
@@ -4328,6 +4413,13 @@ const HANDLERS = {
   "pi-collect": advancePlanetaryCollection,
   colony: (operation, bot) => require("./playerBotColonyRuntime").advanceColony(operation, bot, COLONY_KIT),
   fulfill: advanceFulfill,
+  "trade-run": (operation, bot) => require("./playerBotTradeRunRuntime").advance(operation, bot, {
+    travelToStation: (current, actor, stationID) => travelToStation(current, actor, stationID),
+    record,
+    save: saveOperation,
+    block,
+    finish,
+  }),
   sell: advanceSell,
   haul: advanceHaul,
   mine: advanceMining,
@@ -4873,6 +4965,36 @@ function startHaul(botQuery, itemOrTypeID, fromStationID, toStationID, quantity 
   record(operation, `Hauling ${isItem ? `item ${reference}` : `type ${reference}`} from ${from} to ${to}.`);
   saveOperation(operation);
   return { success: true, operation, message: `${bot.characterName} will haul ${isItem ? `item ${reference}` : `type ${reference}`}${operation.quantity ? ` (${operation.quantity} units)` : ""} from ${from} to ${to} (operation ${operation.operationID}).` };
+}
+
+// A trader's run from the seed market to its hub (playerBotTradeRunRuntime.js).
+function startTradeRun(botQuery, plan = null) {
+  const bot = getPlayerBots().resolveBot(botQuery);
+  const refusal = assertCanStart(bot);
+  if (refusal) return { success: false, message: refusal };
+  const run = plan || require("./playerBotTradeRunRuntime").planTradeRun(bot);
+  if (!run || !Array.isArray(run.items) || !run.items.length) {
+    return { success: false, message: `${bot.characterName}'s hub needs nothing a trade run could bring.` };
+  }
+  const operation = baseOperation("trade-run", bot, {
+    stage: "to-source",
+    sourceStationID: normalizePositiveInteger(run.sourceStationID),
+    hubStationID: normalizePositiveInteger(run.hubStationID),
+    maxSpend: Math.round(Number(run.maxSpend) * 100) / 100,
+    spent: 0,
+    volume: 0,
+    items: run.items.map((item) => ({
+      typeID: normalizePositiveInteger(item.typeID),
+      quantity: normalizePositiveInteger(item.quantity),
+      referencePrice: Number(item.referencePrice) || 0,
+      bought: 0,
+      done: false,
+    })),
+    autonomous: true,
+  });
+  record(operation, `Trade run: buying ${operation.items.length} kind(s) of goods at ${operation.sourceStationID} for the hub ${operation.hubStationID}; spend limit ${operation.maxSpend.toFixed(2)} ISK.`);
+  saveOperation(operation);
+  return { success: true, operation, message: `${bot.characterName} will run goods from ${operation.sourceStationID} to its hub ${operation.hubStationID} (operation ${operation.operationID}).` };
 }
 
 function startAllianceCourier(botQuery, contractID, options = {}) {
@@ -6469,12 +6591,15 @@ module.exports = {
   requiredSkillsForType,
   getCombatShipSkillRequirements,
   getShipRungSkillRequirements,
+  getTradeLadderSkillRequirements,
+  listShipLadderItemDemand,
   resumeOperation,
   reconcileLegacyPIExportReviews,
   startShipUpgrade,
   startCapsuleRecovery,
   startSavedFitting,
   startHaul,
+  startTradeRun,
   startAllianceCourier,
   startAllianceFounding,
   startMining,

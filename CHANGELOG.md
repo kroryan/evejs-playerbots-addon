@@ -3,6 +3,30 @@
 Newest first. The Docker add-on keeps the upstream version number (0.2.152);
 the Windows launcher package adds a fourth number for its own releases.
 
+## Unreleased: trade haulers and escorts
+
+- **Traders fly haulers.** Trade pilots climb their own race's hauler line
+  instead of the mining ladder: the biggest T1 industrial (with Expanded
+  Cargohold IIs), a Deep Space Transport, a Freighter, then a Jump Freighter.
+  The skill profile (v17) trains them for the whole line, prerequisites
+  included, and every trader is topped up once to 20B ISK
+  (`EVEJS_PLAYER_BOTS_TRADER_CAPITAL`) so a Jump Freighter is in reach.
+- **Trade runs.** A trader in a hauler buys the modules, drones and charges
+  bot pilots fit to their ships at the Jita seed market, hauls them to its own
+  trade hub and lists them there at the Jita price plus 15%, for ten fits'
+  worth of each item. Items sold anywhere else in the region are left alone
+  (Jita stays the fallback). At most one run every 30 minutes; a quarter of
+  the trader's wallet, up to 2B ISK, per run.
+- **Escorts for capital haulers.** A trader in a Freighter or Jump Freighter
+  setting off on any haul (trade run, order delivery, sale, haul or courier
+  contract) forms an escort fleet of up to four combat corpmates: idle pilots
+  docked within three jumps first, then security pilots on their way to a
+  patrol. It waits for them before undocking (up to 5 minutes) and in each
+  system before the next gate (up to 90 seconds). Bot-led mining and combat
+  fleets now also wait at each gate (up to a minute).
+- The trade guard allows one Freighter or Jump Freighter hull of up to 20B ISK
+  per purchase; every other purchase keeps the 1B limits.
+
 ## Unreleased: home base
 
 - **Bots live around their headquarters.** A corporation's home is its Upwell

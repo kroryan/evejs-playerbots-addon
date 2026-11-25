@@ -595,6 +595,41 @@ into their own hangars when the fleet docks. A fleet breaks up when the
 commander's job ends, it is offline for 5 minutes, its pilots leave, or after
 about three hours. The dashboard shows these fleets read-only.
 
+**Escorts for capital haulers.** A trader flying a Freighter or Jump Freighter
+that sets off on a haul (a trade run, an order delivery, a sale, a haul or a
+courier contract) leads an escort fleet: up to four combat corpmates, first
+idle ones docked within three jumps, then security pilots on their way to a
+patrol, who drop it. The hauler waits for its escort to dock with it before
+undocking (up to 5 minutes) and, in each system on the route, for the escort
+to catch up before it takes the next gate (up to 90 seconds). Bot-led mining
+and combat fleets wait at gates too, for up to a minute.
+
+### Trade haulers
+
+Trade pilots fly haulers, not mining ships. Each climbs its own race's line,
+one step at a time, when it has the ISK:
+
+| Step | Caldari | Minmatar | Amarr | Gallente | Wallet needed |
+| --- | --- | --- | --- | --- | --- |
+| T1 industrial (Expanded Cargohold IIs) | Tayra | Mammoth | Bestower | Iteron Mark V | 10M |
+| Deep Space Transport | Bustard | Mastodon | Impel | Occator | 250M |
+| Freighter | Charon | Fenrir | Providence | Obelisk | 2.5B |
+| Jump Freighter | Rhea | Nomad | Ark | Anshar | 12B to 14B |
+
+Traders are trained for their whole line and topped up once to 20B ISK
+(`EVEJS_PLAYER_BOTS_TRADER_CAPITAL`; 0 turns the top-up off). The top-up
+counts as outside capital, not profit, so no share of it goes to the
+corporation. Jump Freighters use gates like everyone else.
+
+A trader with a hauler and nothing else to do runs goods to its trade hub
+(at most once every 30 minutes). It picks the modules, drones and charges bot
+pilots fit to their ships that the hub has less than half of ten fits' worth
+of, buys them at the Jita seed market with up to a quarter of its wallet (2B
+ISK at most), hauls them to the hub and lists them at the Jita price plus 15%.
+Pilots upgrading at that hub then buy there instead of flying to Jita. Items
+already sold elsewhere in the region are skipped, since Jita is only the
+fallback market.
+
 | Setting | Default | Environment variable |
 | --- | --- | --- |
 | Bot fleets on/off | on | `EVEJS_PLAYER_BOTS_BOT_FLEETS=0` turns them off |
@@ -718,7 +753,7 @@ planet for the production cycle.
 | Command | Use |
 | --- | --- |
 | `/playerbots trade quote <bot> <typeID>` | Show accessible best local buy/sell quotes. |
-| `/playerbots trade buy <bot> <typeID> <quantity> <maxUnitPrice>` | Buy immediately from local stock, capped at 100,000 units and 1B ISK per call. |
+| `/playerbots trade buy <bot> <typeID> <quantity> <maxUnitPrice>` | Buy immediately from local stock, capped at 100,000 units and 1B ISK per call (one Freighter or Jump Freighter hull may cost up to 20B). |
 | `/playerbots trade sell <bot> <itemID> [quantity] <minUnitPrice>` | Sell personal hangar inventory into accessible local buy orders. This does not create a standing order or sell ships. |
 | `/playerbots trade autosell set <bot> <typeID> <minUnitPrice> <maxUnits>` | Enable recurring sales of that type from the bot's current hangar. Unsold stock is listed for 90 days at the chosen floor; listing fees are waived. |
 | `/playerbots trade autosell status <bot>` / `off <bot>` | Inspect or disable the auto-sale policy. |
