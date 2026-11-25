@@ -1794,6 +1794,12 @@ async function runDirectorInternal(bots = [], options = {}) {
         `[PlayerBots] Grievance war planning was skipped: ${String(error && error.message || error).slice(0, 180)}.`,
       );
     }
+    // Every bot may use its corporation's hangars 1-5 (bot and player corps).
+    try {
+      require("./playerBotCorpHangarRuntime").grantRolesToRoster(allRosterBots);
+    } catch (error) {
+      require("../../utils/logger").warn(`[PlayerBots] Hangar roles were skipped: ${String(error && error.message || error).slice(0, 180)}.`);
+    }
     // Corporations band together into alliances (dashboard plans, shared
     // enemies, or by empire at population, per the alliance mode setting).
     try {

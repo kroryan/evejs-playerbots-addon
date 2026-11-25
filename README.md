@@ -113,6 +113,11 @@ responsive. Work is saved as it goes and resumes after a restart.
   near it, in low- and null-sec too when the risk tolerance allows.
 - **Mining:** belt mining, refining and selling, or delivery to the
   corporation's headquarters, with security escorts when rats are about.
+- **Corporation hangars:** deposits go into the corporation's office hangar
+  at headquarters (1 Mining, 2 Planetary, 3 Industry, 4 Trade, 5 Combat),
+  where players can see them, not into Corporation Deliveries. Bots in any
+  corporation, yours included, may use hangars 1-5; a bot corporation's CEO
+  rents the office.
 - **Industry:** manufacturing paid from a personal or corporation wallet,
   with spending limits.
 - **Planetary interaction:** a small share of pilots sets up colonies and

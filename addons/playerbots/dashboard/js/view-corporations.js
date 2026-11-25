@@ -130,7 +130,7 @@ function hqHtml() {
     </div>
     ${detail.deposit ? `<h3 class="section-label">Mining and PI output</h3>
       <p style="margin:0 0 8px"><strong>${detail.deposit.enabled ? `Deposited to ${esc(detail.deposit.label)}` : "Sold on the market"}</strong> <span class="muted">${detail.deposit.explicit ? "(set by hand)" : "(automatic)"}</span></p>
-      <div class="subform"><select class="field" data-deposit="mode" aria-label="Change where output goes"><option value="">Change where it goes…</option><option value="on">Deposit at HQ</option><option value="off">Sell</option><option value="auto">Automatic</option><option value="deliveries">Deposit to Corporation Deliveries</option><option value="hangar">Deposit to hangar division…</option></select>
+      <div class="subform"><select class="field" data-deposit="mode" aria-label="Change where output goes"><option value="">Change where it goes…</option><option value="on">Deposit at HQ</option><option value="off">Sell</option><option value="auto">Automatic</option><option value="hangar">Deposit to one hangar division…</option><option value="deliveries">Deposit to Corporation Deliveries (not visible in EveJS)</option></select>
       <label class="muted">division <input class="field" type="number" min="1" max="7" value="${detail.deposit.division || 1}" data-deposit="division" style="width:60px"></label></div>` : ""}
   </div>`;
 }

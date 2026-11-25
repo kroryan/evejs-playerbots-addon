@@ -687,8 +687,10 @@ without its usual threat responses, so use it in safe space. A pilot whose
 structure trip fails is released back to the director. `work` releases the
 corporation and starts mining around the HQ (or the nearest safe belts) and
 PI setup, or leaves the pilots to the director. `deposit` (CEO or staff)
-sends finished mining and PI output to the HQ, Corporation Deliveries or a
-hangar division instead of the market. Recall and work orders, from chat or
+sends finished mining and PI output to the HQ instead of the market, into the
+corporation hangar for the work (see [Corporation hangars](#corporation-hangars)),
+one chosen `hangar <1-7>` division, or `deliveries` (Corporation Deliveries,
+which EveJS does not show). Recall and work orders, from chat or
 the dashboard's Corporations page, are saved in the game store and re-issued
 about a minute after the server starts; a recall holds the corporation until
 it is sent to work, resumed or the order is cancelled. `status` lists held
@@ -831,6 +833,31 @@ An HQ nobody can dock at (docking service offline) is no home.
 | Setting | Default | Environment variable |
 | --- | --- | --- |
 | Stay within (jumps of HQ) | 5 | `EVEJS_PLAYER_BOTS_HOME_RANGE_JUMPS` (0 to 30; 0 turns home base off) |
+
+### Corporation hangars
+
+Corporation goods go into the corporation's office hangar at headquarters,
+where players can open them, not into Corporation Deliveries, which EveJS does
+not show. Each kind of work has its own division:
+
+| Division | Name (bot corporations) | Filled by |
+| --- | --- | --- |
+| 1 | Mining | Ore and minerals from mining deposits |
+| 2 | Planetary | PI goods from collection deposits |
+| 3 | Industry | Corporation industry cycles, unless a division is given |
+| 4 | Trade | Corporation trade orders, unless a division is given |
+| 5 | Combat | Reserved for combat work |
+
+Every bot, in a bot-run or a player-run corporation, is given the roles to
+view and take from divisions 1-5 and from deliveries, and nothing more (no
+director, wallet or other division roles); people's roles are never changed.
+A bot-run corporation's CEO rents the office at headquarters the first time
+it is docked there with goods to deposit, paid from the corporation wallet,
+and the divisions are named as above (names already chosen are kept). A
+player corporation rents its own office; until there is one, deposits fall
+back to Corporation Deliveries. `/bots corp deposit hangar <n>` sends
+everything to one division instead, and `/bots corp deposit deliveries` back
+to Deliveries.
 
 ### Bot alliances
 

@@ -218,8 +218,9 @@ function resolveTradeAssetOwner(context, options = {}) {
     };
   }
   const sessionCorporationID = Number(context.session.corporationID || context.session.corpid) || 0;
-  const hangarDivision = Math.trunc(Number(options.hangarDivision) || 0);
-  const walletDivision = Math.trunc(Number(options.walletDivision) || 0);
+  // Corporation trading uses hangar 4 (Trade) unless a division is chosen.
+  const hangarDivision = Math.trunc(Number(options.hangarDivision) || 0) || 4;
+  const walletDivision = Math.trunc(Number(options.walletDivision) || 0) || 1;
   if (corporationID !== sessionCorporationID || hangarDivision < 1 || hangarDivision > 7 ||
       walletDivision < 1 || walletDivision > 7) {
     return { success: false, message: "The selected corporation, hangar division, or wallet division is not available to this bot." };

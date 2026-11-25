@@ -276,7 +276,8 @@ export const TOPICS = [
       h("Headquarters and where goods go"),
       list([
         "Set headquarters to one of the corporation's structures or any station, or go back to its own HQ.",
-        "Choose what happens to mined ore and PI goods from orders: sell them, deposit them at headquarters, use Corporation Deliveries, or a hangar division.",
+        "Choose what happens to mined ore and PI goods from orders: sell them or deposit them at headquarters. Deposits go to the corporation hangar for the work (1 Mining, 2 Planetary) unless you pick one division; Corporation Deliveries is still offered but EveJS does not show it.",
+        "Bots in any corporation, yours included, may view and take from hangars 1-5 (Mining, Planetary, Industry, Trade, Combat). A bot-run corporation's CEO rents the office at headquarters and names the divisions.",
       ]),
       p("Pilots live around their headquarters: the corporation's Upwell headquarters structure, or a station you set if it has no structure. A pilot with no job further than the <strong>Stay within (jumps of HQ)</strong> setting (5 by default) flies home first, miners work from the headquarters or the nearest belt station to it, and combat pilots look for sites near it. Traders follow the markets. Set the range to 0 to let pilots roam."),
       h("Priorities"),

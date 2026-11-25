@@ -3,6 +3,24 @@
 Newest first. The Docker add-on keeps the upstream version number (0.2.152);
 the Windows launcher package adds a fourth number for its own releases.
 
+## Unreleased: corporation hangars
+
+- **Deposits go to corporation hangars.** Corporation Deliveries cannot be
+  opened in EveJS, so mining and PI deposits now go into the corporation's
+  office hangar at headquarters: ore and minerals to division 1 (Mining), PI
+  goods to division 2 (Planetary). Corporation industry cycles default to
+  division 3 (Industry) and corporation trade orders to 4 (Trade); 5 (Combat)
+  is reserved.
+- **Roles for bots in every corporation.** Each bot, in bot-run and player
+  corporations alike, gets the roles to view and take from divisions 1-5 and
+  deliveries; nothing else, and people's roles are untouched.
+- **Offices and division names.** A bot-run corporation's CEO rents the office
+  at headquarters when docked there with goods to deposit, and names
+  divisions 1-5. Player corporations rent their own; without an office goods
+  still fall back to Deliveries.
+- `/bots corp deposit deliveries` and `hangar <n>` still choose by hand; an
+  older saved default of Deliveries now moves to hangars.
+
 ## Unreleased: bot alliances
 
 - **Corporations form alliances.** Alliance mode (Settings,
