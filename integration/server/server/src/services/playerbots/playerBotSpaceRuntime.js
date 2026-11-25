@@ -566,8 +566,14 @@ function buildConnectionPlan(bots = playerBots.listBots(), options = {}) {
   const humanCorpBots = bots
     .filter((bot) => humanCorporations.has(Number(bot.corporationID)))
     .map((bot) => Number(bot.characterID));
+  let fleetDutyBots = [];
+  try {
+    fleetDutyBots = require("./playerBotFleetCommandRuntime").enrolledIDs();
+  } catch (_) { /* fleet duty unavailable */ }
   const priorityGroups = [
     capacity.getHumanControlledBotIDs(bots),
+    // Bots working for a human fleet commander stay online with that FC.
+    fleetDutyBots,
     humanCorpBots,
     [...activeWorkCharacterIDs()],
   ];

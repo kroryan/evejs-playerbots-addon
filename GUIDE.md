@@ -554,6 +554,34 @@ including charges saved in a weapon slot; load it into weapons through the
 normal ship UI after delivery. A fitting that requires untrained skills or
 unsupported item locations is rejected before purchase.
 
+### Fleet duty (dashboard Fleets page)
+
+The person leading a fleet (the fleet commander, or FC) can put the fleet's
+bots to work from the dashboard's **Fleets** page:
+
+1. Form a fleet in game and add bots with `/playerbots fleet add <bot>`.
+2. On **Fleets**, choose the kind of fleet: **Mining**, **Combat**,
+   **Hauling** or **Escort**, and optionally a saved fitting for it.
+3. Press **Start fleet duty** (tick bots first to use only some of them).
+
+Each bot then:
+
+| Step | What it does |
+| --- | --- |
+| Fit up | A bot whose ship cannot do the job fetches one: the FC's saved fitting if set, otherwise the built-in Playerbots fit (an owned hull is reused where possible). After two failed tries it follows the FC without working. |
+| Meet the FC | Travels to the FC's system and docks where the FC is docked. |
+| Undock | Undocks within a few seconds of the FC. |
+| Warp | Recalls drones and warps to the FC once the FC lands. |
+| Work | **Mining:** lasers and mining drones; a hold over 90% full goes into the FC's fleet hangar (the FC must allow fleet access), otherwise into a jet can next to the FC. **Combat:** the FC's locked target, then every rat on grid, with drones, fighters and guns. **Hauling:** empties fleet members' jet cans and delivers to the FC's fleet hangar, in space or docked together. **Escort:** stays within 2.5 km of the FC and fights rats within 30 km. |
+| Stay alive | A badly damaged bot docks at the nearest station, repairs and rejoins. |
+
+Bots on fleet duty get no director work, are never queued for work capacity,
+and stay connected. **Stand down** ends the duty for every bot; it also ends
+when a bot leaves the fleet or the FC has been offline for 15 minutes. **Call
+in busy bots** stops the bots' own work so they join now. The FC's choices are
+saved per FC and apply to the next fleet they lead. Fleets do not survive a
+server restart, so form the fleet again after one.
+
 ### Fleets and corporations
 
 | Command | Use |

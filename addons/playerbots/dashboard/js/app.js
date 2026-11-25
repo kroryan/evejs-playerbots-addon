@@ -10,6 +10,7 @@ import { openPalette, closePalette, paletteOpen } from "./palette.js";
 import { renderRail } from "./rail.js";
 import * as activity from "./view-activity.js";
 import * as corporations from "./view-corporations.js";
+import * as fleets from "./view-fleets.js";
 import * as history from "./view-history.js";
 import * as world from "./view-world.js";
 import * as performance from "./view-performance.js";
@@ -17,19 +18,20 @@ import * as settings from "./view-settings.js";
 import * as guide from "./view-guide.js";
 import { PAGE_TOPICS } from "./guide-content.js";
 
-const VIEWS = { activity, corporations, history, world, performance, settings, guide };
+const VIEWS = { activity, corporations, fleets, history, world, performance, settings, guide };
 export const NAV = [
   { view: "activity", label: "Activity", icon: "activity", key: "a", group: "Monitor" },
   { view: "world", label: "World", icon: "world", key: "w", group: "Monitor" },
   { view: "history", label: "History", icon: "history", key: "h", group: "Monitor" },
   { view: "performance", label: "Performance", icon: "performance", key: "p", group: "Monitor" },
   { view: "corporations", label: "Corporations", icon: "corporations", key: "c", group: "Manage" },
+  { view: "fleets", label: "Fleets", icon: "fleet", key: "f", group: "Manage" },
   { view: "settings", label: "Settings", icon: "settings", key: "s", group: "Manage" },
   { view: "guide", label: "Guide", icon: "guide", key: "g", group: "Help" },
 ];
 const TITLES = Object.fromEntries(NAV.map((item) => [item.view, item.label]));
 // Old hashes from earlier dashboards keep working.
-const ALIASES = { help: "guide", docs: "guide", overview: "activity", pilots: "activity", operations: "history", priorities: "corporations", systems: "world", territory: "world/territory", killboard: "world/killboard" };
+const ALIASES = { help: "guide", docs: "guide", overview: "activity", pilots: "activity", operations: "history", priorities: "corporations", systems: "world", fleet: "fleets", territory: "world/territory", killboard: "world/killboard" };
 const TREND_POINTS = 40;
 
 export const store = {

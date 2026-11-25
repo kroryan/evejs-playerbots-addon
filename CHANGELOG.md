@@ -3,6 +3,27 @@
 Newest first. The Docker add-on keeps the upstream version number (0.2.152);
 the Windows launcher package adds a fourth number for its own releases.
 
+## Unreleased: fleet duty
+
+On the `dashboard-redesign` branch, after the redesign. Server and dashboard.
+
+- **Fleets page.** Lists every fleet with bots, its fleet commander (FC), the
+  FC's fleet hangar and what each bot is doing. The FC chooses **Mining**,
+  **Combat**, **Hauling** or **Escort** and, optionally, a saved fitting.
+- **Fleet duty** (new `fleet-duty` operation): bots fetch a fitting ship if
+  they need one, travel to the FC, dock and undock with the FC, follow the FC
+  in warp and work the grid: mine and unload into the FC's fleet hangar or a
+  jet can, kill every rat (drones, fighters, guns), haul fleet jet cans to the
+  FC, or escort. Badly damaged bots dock, repair and rejoin.
+- Bots on duty take no director work, are not queued for work capacity, stay
+  connected, and answer attackers instead of running home.
+- New add-on API routes `GET /v1/dashboard/fleets` and
+  `POST /v1/dashboard/fleet-command`, proxied as `/api/fleets` and
+  `/api/fleet-command`. A new guide topic, *Running a bot fleet*.
+- Tested on the test server with a headless FC in an Orca: undock, fleet warp,
+  laser mining, jet cans, fleet hangar deliveries, combat, withdrawal and
+  repair, cross-system travel, docking with the FC and standing down.
+
 ## Unreleased: dashboard redesign
 
 On the `dashboard-redesign` branch of the ubermidas fork. A new front end for

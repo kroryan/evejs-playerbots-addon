@@ -190,6 +190,11 @@ function setEnabled(enabled) {
 
 function isBusy(characterID) {
   if (require("./playerBotLocalDefenseAdapter").hasLease(characterID)) return true;
+  // A bot a fleet commander has put on fleet duty takes no director work,
+  // including while it fetches a ship for the fleet.
+  try {
+    if (require("./playerBotFleetCommandRuntime").isEnrolled(characterID)) return true;
+  } catch (_) { /* fleet duty unavailable: the director keeps the pilot */ }
   const interruptions = require("./playerBotInterruptRuntime");
   if (interruptions.isBusy(characterID) || interruptions.hasPending(characterID)) return true;
   const operations = require("./playerBotOperationRuntime");
@@ -212,7 +217,7 @@ function isBusy(characterID) {
     }) &&
     !operation?.pending && operation?.kind !== "structure-deployment" &&
     operation?.kind !== "structure-procurement" &&
-    !["combat", "sovereignty", "alliance-courier", "fleet-attack"].includes(operation?.kind) &&
+    !["combat", "sovereignty", "alliance-courier", "fleet-attack", "fleet-duty"].includes(operation?.kind) &&
     !(operation?.kind === "pi-collect" && (Number(operation.containerID) > 0 || operation.exportAttempt));
   if (headquartersNeeded) return false;
   const cycle = require("./playerBotIndustryCycleRuntime").getCycle(characterID);
@@ -606,6 +611,9 @@ function selectWorkToPause(entries, limit, protectedEntries = new Set(), humanCo
     workStagePriority(right) - workStagePriority(left) ||
     (Date.parse(left.work.createdAt || "") || 0) - (Date.parse(right.work.createdAt || "") || 0));
   const protectedWork = new Set([
+    // Work a human fleet commander gave is never queued for capacity: a
+    // queued pilot is taken out of space and would lose its fleet.
+    ...prioritized.filter((entry) => ["fleet-duty", "fleet-follow", "fleet-attack"].includes(String(entry.kind || ""))),
     ...prioritized.filter(isFiniteDestinationWork),
     ...prioritized.filter((entry) => protectedEntries.has(entry)),
     ...prioritized.filter((entry) => humanControlledBotIDs.has(Number(entry.characterID))),
@@ -1815,7 +1823,7 @@ async function runDirectorInternal(bots = [], options = {}) {
       require("./playerBotStructureWorkPolicy").shouldPauseForHeadquartersWork({
         headquartersWorkCanStart: true,
         protectedOperation: operation.pending ||
-          ["combat", "sovereignty", "alliance-courier", "fleet-attack"].includes(operation.kind) ||
+          ["combat", "sovereignty", "alliance-courier", "fleet-attack", "fleet-duty"].includes(operation.kind) ||
           operation.kind === "pi-collect" && (Number(operation.containerID) > 0 || operation.exportAttempt),
         hasStructurePackage: Boolean(require("./playerBotStructureRuntime").findStructurePackage(bot)),
         hasPurchasePlan: Boolean(require("./playerBotStructureRuntime").findAutonomousPurchasePlan(bot)),
@@ -1941,7 +1949,7 @@ async function runDirectorInternal(bots = [], options = {}) {
     const headquartersOperation = operationRuntime.getOperation(bot.characterID);
     const headquartersWorkCanStart = headquartersStructure &&
       !headquartersOperation?.pending &&
-      !["combat", "sovereignty", "alliance-courier", "fleet-attack"].includes(headquartersOperation?.kind) &&
+      !["combat", "sovereignty", "alliance-courier", "fleet-attack", "fleet-duty"].includes(headquartersOperation?.kind) &&
       !(headquartersOperation?.kind === "pi-collect" &&
         (Number(headquartersOperation.containerID) > 0 || headquartersOperation.exportAttempt));
     const corporateHQDepot = headquartersWorkCanStart

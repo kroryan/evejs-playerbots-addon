@@ -2924,6 +2924,9 @@ function startShipUpgrade(botQuery, role = "mining", options = {}) {
     pending: null,
     newShipID: null,
     autonomous: options.autonomous === true,
+    ...(normalizePositiveInteger(options.fleetDutyCommanderID)
+      ? { fleetDutyCommanderID: normalizePositiveInteger(options.fleetDutyCommanderID) }
+      : {}),
   });
   if (options.warMobilizationSupportID) {
     const reservation = require("./playerBotWarMobilizationRuntime")
@@ -2937,7 +2940,7 @@ function startShipUpgrade(botQuery, role = "mining", options = {}) {
   return { success: true, operation, message: `${bot.characterName} will buy and fit a ${rung.name} at ${operation.marketStationID} (maximum spend ${operation.maxSpend.toFixed(2)} ISK).` };
 }
 
-function startSavedFitting(botQuery, fittingID, requesterSession, requestedMaxSpend = null) {
+function startSavedFitting(botQuery, fittingID, requesterSession, requestedMaxSpend = null, options = {}) {
   const bot = getPlayerBots().resolveBot(botQuery);
   const refusal = assertCanStart(bot);
   if (refusal) return { success: false, message: refusal };
@@ -3003,6 +3006,9 @@ function startSavedFitting(botQuery, fittingID, requesterSession, requestedMaxSp
     pending: null,
     newShipID: null,
     autonomous: false,
+    ...(normalizePositiveInteger(options.fleetDutyCommanderID)
+      ? { fleetDutyCommanderID: normalizePositiveInteger(options.fleetDutyCommanderID) }
+      : {}),
   });
   record(operation, `Preparing saved fitting ${saved.name} (${numericFittingID}) at ${operation.marketStationID}; spend limit ${operation.maxSpend.toFixed(2)} ISK with ${protectedCapital.toFixed(2)} ISK starting capital protected.`);
   saveOperation(operation);
@@ -4295,6 +4301,14 @@ const HANDLERS = {
     block,
     finish,
   }),
+  "fleet-duty": (operation, bot) => require("./playerBotFleetCommandRuntime").advanceFleetDuty(operation, bot, {
+    travelToSystem: (current, actor, systemID) => travelToSystem(current, actor, systemID),
+    travelToStation: (current, actor, stationID) => travelToStation(current, actor, stationID),
+    clearRouteTask,
+    record,
+    save: saveOperation,
+    finish,
+  }),
   "pi-collect": advancePlanetaryCollection,
   colony: (operation, bot) => require("./playerBotColonyRuntime").advanceColony(operation, bot, COLONY_KIT),
   fulfill: advanceFulfill,
@@ -4552,6 +4566,39 @@ function startFleetFollow(botQuery, targetCharacterID, followMode, requesterChar
   require("./playerBotAutonomyRuntime").wakeIndustryCycleStep(bot.characterID).catch((error) =>
     require("../../utils/logger").warn(`[PlayerBots] Could not wake fleet-follow order char=${bot.characterID}: ${error.message}`));
   return { success: true, operation, message: `${bot.characterName} accepted the ${mode} order and will follow human fleet member ${targetID}.` };
+}
+
+// Fleet duty (see playerBotFleetCommandRuntime.js): the bot works for a human
+// fleet commander until the FC stands the fleet down. Only the fleet command
+// runtime starts it, once the pilot's other work is finished or stopped.
+function startFleetDuty(botQuery, commanderCharacterID, options = {}) {
+  const bot = getPlayerBots().resolveBot(botQuery);
+  if (!bot) return { success: false, message: `No unique playerbot found for ${botQuery}.` };
+  if (bot.status === "paused" || bot.autonomyPaused === true) {
+    return { success: false, message: `${bot.characterName} is paused and cannot join fleet duty.` };
+  }
+  const commanderID = normalizePositiveInteger(commanderCharacterID);
+  if (!commanderID) return { success: false, message: "Fleet duty needs a fleet commander." };
+  const refusal = assertCanStart(bot);
+  if (refusal) return { success: false, message: refusal };
+  const operation = baseOperation("fleet-duty", bot, {
+    stage: "muster",
+    commanderID,
+    fleetID: 0,
+    fleetType: String(options.fleetType || ""),
+    fitWaivedForType: String(options.fitWaivedForType || ""),
+    fitCheckedAtMs: 0,
+    routeDestinationSystemID: 0,
+    userDirected: true,
+    autonomous: false,
+    stopRequested: false,
+    stopReason: "",
+  });
+  record(operation, `${bot.characterName} reported for ${operation.fleetType || "fleet"} duty with fleet commander ${commanderID}.`);
+  saveOperation(operation);
+  require("./playerBotAutonomyRuntime").wakeIndustryCycleStep(bot.characterID).catch((error) =>
+    require("../../utils/logger").warn(`[PlayerBots] Could not wake fleet duty char=${bot.characterID}: ${error.message}`));
+  return { success: true, operation, message: `${bot.characterName} is on fleet duty.` };
 }
 
 function startFleetAttack(botQuery, target = {}) {
@@ -5535,6 +5582,20 @@ function stopOperation(botQuery) {
         : `Operation ${operation.operationID} for ${bot.characterName} is withdrawing safely; combat drones will return and an active Entosis cycle will finish before warp.`,
     };
   }
+  if (operation.kind === "fleet-duty" && ACTIVE_STATUSES.has(operation.status)) {
+    operation.stopRequested = true;
+    operation.stopReason = operation.stopReason || "Stopped by an operator.";
+    record(operation, `${operation.stopReason} Recalling drones before leaving the fleet's work.`);
+    saveOperation(operation);
+    require("./playerBotAutonomyRuntime").wakeIndustryCycleStep(bot.characterID).catch((error) =>
+      require("../../utils/logger").warn(`[PlayerBots] Could not wake fleet duty stop char=${bot.characterID}: ${error.message}`));
+    return {
+      success: true,
+      operation,
+      graceful: true,
+      message: `${bot.characterName} is recalling drones and leaving fleet duty.`,
+    };
+  }
   if (operation.kind === "fleet-attack") {
     const result = requestFleetAttackStop(bot.characterName);
     return {
@@ -6385,6 +6446,8 @@ module.exports = {
   startStructureServiceProvision,
   startFleetFollow,
   commandFleetFollow,
+  startFleetDuty,
+  getMiningModules,
   startFleetAttack,
   requestFleetAttackStop,
   stopOperation,

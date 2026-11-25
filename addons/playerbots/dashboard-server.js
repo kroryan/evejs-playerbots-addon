@@ -503,6 +503,29 @@ function createDashboardServer(options = {}) {
       }
       return proxyApi(response, `/v1/dashboard/${url.pathname.slice(5)}`, `?${new URLSearchParams({ [key]: String(id) })}`);
     }
+    if (url.pathname === "/api/fleets") {
+      if (request.method !== "GET") {
+        send(response, 405, "text/plain; charset=utf-8", "Method not allowed.", { allow: "GET" });
+        return;
+      }
+      return proxyApi(response, "/v1/dashboard/fleets");
+    }
+    if (url.pathname === "/api/fleet-command") {
+      if (request.method !== "POST") {
+        send(response, 405, "text/plain; charset=utf-8", "Method not allowed.", { allow: "POST" });
+        return;
+      }
+      if (!isSameOriginRequest(request)) {
+        send(response, 403, "application/json; charset=utf-8", JSON.stringify({ error: "Cross-origin dashboard commands are blocked." }));
+        return;
+      }
+      const body = await readJsonBody(request);
+      return proxyMutation(response, "/v1/dashboard/fleet-command", "POST", {
+        commanderID: body.commanderID,
+        action: body.action,
+        args: body.args && typeof body.args === "object" && !Array.isArray(body.args) ? body.args : {},
+      });
+    }
     if (url.pathname === "/api/corp-command" || url.pathname === "/api/bot-command") {
       if (request.method !== "POST") {
         send(response, 405, "text/plain; charset=utf-8", "Method not allowed.", { allow: "POST" });
