@@ -1,5 +1,8 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#78eff1"/><stop offset="1" stop-color="#3a9de8"/></linearGradient></defs>
-  <rect width="64" height="64" rx="15" fill="#101823"/>
-  <path d="M32 9 56 52H8L32 9Zm0 13-10 19h20L32 22Z" fill="url(#g)" fill-rule="evenodd"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <rect width="32" height="32" rx="7" fill="#000"/>
+  <path d="M16 3.5 26.8 9.7v12.6L16 28.5 5.2 22.3V9.7Z" fill="#22d3ee"/>
+  <path d="M16 7.4 23.4 11.7v8.6L16 24.6l-7.4-4.3v-8.6Z" fill="#000"/>
+  <circle cx="12.9" cy="15" r="1.8" fill="#22d3ee"/>
+  <circle cx="19.1" cy="15" r="1.8" fill="#22d3ee"/>
+  <path d="M12.6 19.3h6.8" stroke="#22d3ee" stroke-width="1.8" stroke-linecap="round"/>
 </svg>

@@ -725,8 +725,9 @@ function startCycle(botQuery, blueprintTypeID, runs, maxSpend, options = {}) {
     : roundIsk(options.minUnitPrice);
   const corporationID = Number(session.corporationID || session.corpid || character.corporationID || bot.corporationID) || 0;
   const corporateAssets = options.assetOwner === "corporation";
-  const hangarDivision = Math.trunc(Number(options.hangarDivision) || 0);
-  const walletDivision = Math.trunc(Number(options.walletDivision) || 0);
+  // Corporation industry uses hangar 3 (Industry) unless a division is chosen.
+  const hangarDivision = Math.trunc(Number(options.hangarDivision) || 0) || (corporateAssets ? 3 : 0);
+  const walletDivision = Math.trunc(Number(options.walletDivision) || 0) || (corporateAssets ? 1 : 0);
   if (corporateAssets && (autoPlan || !corporationID || hangarDivision < 1 || hangarDivision > 7 || walletDivision < 1 || walletDivision > 7)) {
     return { success: false, message: "Corporation cycles need an explicit blueprint type, a valid member corporation, and hangar and wallet divisions from 1 to 7." };
   }

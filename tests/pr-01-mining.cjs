@@ -145,6 +145,7 @@ async function mining() {
             hops: 1,
           }),
           clearRouteTask: () => {},
+          fleetCommanderShouldWait: () => false,
         });
         await c.advanceMining(o, bot);
         assert.equal(o.homeStationID, territorial ? 10 : 20);

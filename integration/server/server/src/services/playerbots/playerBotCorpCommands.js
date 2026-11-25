@@ -989,8 +989,8 @@ function commandDeposit(parsed, session, corporationID, options = {}) {
       on: { enabled: true },
       off: { enabled: false },
       auto: { enabled: null },
-      deliveries: { target: "deliveries" },
-      hangar: { target: "hangar", division: parsed.depositDivision },
+      deliveries: { target: "deliveries", deliveriesChosen: true },
+      hangar: { target: "hangar", division: parsed.depositDivision, deliveriesChosen: false },
     }[action];
     try { deposit.updateSettings(corporationID, patch); }
     catch (error) { return `Could not save the deposit setting: ${error.message}.`; }
@@ -1002,7 +1002,7 @@ function commandDeposit(parsed, session, corporationID, options = {}) {
   return [
     `Deposit for corporation ${corporationID}: ${mode}.`,
     `Goods go to ${info.label}${info.depot ? ` at ${formatDestination(info.depot)}` : " (no usable HQ right now; see /bots corp hq)"}.`,
-    "Mining and PI collection jobs started from now on take their output to the HQ and hand it to the corporation instead of selling it; hangar divisions need a corporation office at the HQ and otherwise fall back to Corporation Deliveries.",
+    "Mining and PI collection jobs started from now on take their output to the HQ and hand it to the corporation instead of selling it; ore and minerals go to hangar 1 (Mining), PI goods to hangar 2 (Planetary), unless a division is chosen. A bot-run corporation's CEO rents the office at the HQ; without an office the goods fall back to Corporation Deliveries, which EveJS does not show.",
   ].join("\n");
 }
 

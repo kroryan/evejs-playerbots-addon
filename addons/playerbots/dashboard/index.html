@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -10,35 +10,52 @@
   <script type="module" src="/js/app.js"></script>
 </head>
 <body>
-  <aside class="rail">
-    <a class="brand" href="#activity" aria-label="Playerbots home">
-      <span class="brand-mark">E</span><span><strong>EveJS</strong><small>Playerbots</small></span>
-    </a>
-    <nav id="navigation" aria-label="Dashboard sections">
-      <a class="nav-link" href="#activity" data-view="activity"><span class="nav-icon">◈</span>Activity</a>
-      <a class="nav-link" href="#corporations" data-view="corporations"><span class="nav-icon">▤</span>Corporations</a>
-      <a class="nav-link" href="#history" data-view="history"><span class="nav-icon">⌁</span>History</a>
-      <a class="nav-link" href="#world" data-view="world"><span class="nav-icon">◎</span>World</a>
-      <a class="nav-link" href="#performance" data-view="performance"><span class="nav-icon">∿</span>Performance</a>
-      <a class="nav-link" href="#settings" data-view="settings"><span class="nav-icon">⚙</span>Settings</a>
-      <a class="nav-link" href="#guide" data-view="guide"><span class="nav-icon">?</span>Guide</a>
-    </nav>
-    <div class="rail-bottom">
-      <div class="row"><span id="connection-dot" class="live-dot"></span><span id="connection-state">Connecting…</span></div>
-      <small id="uptime"></small>
-    </div>
-  </aside>
+  <a class="skip-link" href="#view">Skip to content</a>
+  <div class="app" id="app">
+    <aside class="sidenav" id="sidenav">
+      <div class="sidenav-top">
+        <a class="brand" href="#activity" aria-label="Playerbots, Activity">
+          <span class="brand-mark" id="brand-mark"></span>
+          <span class="brand-text"><strong>Playerbots</strong><small>EveJS control</small></span>
+        </a>
+        <button class="nav-search" id="open-palette" type="button" aria-label="Search pilots, corporations, pages and commands">
+          <span id="search-icon"></span><span class="nav-search-text">Search…</span><kbd>Ctrl K</kbd>
+        </button>
+      </div>
+      <nav id="navigation" class="nav" aria-label="Dashboard sections"></nav>
+      <div class="sidenav-foot">
+        <div class="server-status" id="server-chip" title="Connection to EveJS">
+          <span id="connection-dot" class="live-dot"></span>
+          <span class="server-status-text"><strong id="connection-state">Connecting…</strong><small id="uptime"></small></span>
+        </div>
+        <button id="theme-toggle" class="nav-tool" type="button"></button>
+      </div>
+    </aside>
 
-  <main class="main">
-    <header class="topbar">
-      <div class="crumbs" id="crumbs"><strong>Activity</strong></div>
-      <div class="top-actions"><span id="updated-at">Loading…</span><a id="guide-link" class="btn small ghost" href="#guide" title="Open the guide for this page">? Guide</a><button id="refresh" class="btn small" type="button" title="Refresh now">↻ Refresh</button></div>
-    </header>
-    <div id="view" class="view" aria-live="polite"></div>
-    <footer class="footer"><span>EveJS Playerbots add-on</span><span>Commands act as the server operator</span></footer>
-  </main>
+    <main class="center" id="main">
+      <div class="topbar" id="topbar">
+        <div class="topbar-title">
+          <div class="crumbs" id="crumbs"><strong>Activity</strong></div>
+        </div>
+        <div class="top-actions">
+          <span class="updated" id="updated-at">Loading…</span>
+          <div class="live-control" id="live-control"></div>
+          <button id="refresh" class="icon-button" type="button" title="Refresh now (R)" aria-label="Refresh now"></button>
+          <button id="notifications" class="icon-button" type="button" title="Orders and messages this visit" aria-label="Orders and messages this visit"><span class="badge hidden" id="notification-count"></span></button>
+          <a id="guide-link" class="icon-button" href="#guide" title="Guide for this page" aria-label="Guide for this page"></a>
+          <button id="panel-toggle" class="icon-button panel-toggle" type="button" title="Show or hide the watch panel (W)" aria-label="Show or hide the watch panel"></button>
+        </div>
+      </div>
+      <div id="view" class="view" aria-live="polite" tabindex="-1"></div>
+      <footer class="footer"><span>EveJS Playerbots add-on</span><span>Orders act as the server operator</span></footer>
+    </main>
+
+    <aside class="watch" id="siderail" aria-label="Watch panel"></aside>
+  </div>
 
   <div id="drawer-root"></div>
+  <div id="palette-root"></div>
+  <div id="popover-root"></div>
   <dialog id="dialog"></dialog>
   <div id="toasts" class="toasts" aria-live="polite"></div>
 </body>

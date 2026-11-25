@@ -2,7 +2,7 @@
 // working.
 
 import { getJSON } from "./api.js";
-import { $, esc, num, rel, duration, stateBar, coalesce, replaceKeepingFocus } from "./ui.js";
+import { $, esc, num, rel, duration, stateBar, coalesce, replaceKeepingFocus, pageHead, notice, stat, sparkline, icon, emptyState, skeleton } from "./ui.js";
 import { openPilot } from "./drawer.js";
 import { createRoster, loadRoster, rosterHtml, bindRoster } from "./roster.js";
 
@@ -14,9 +14,39 @@ function headerHtml(summary) {
   const autowork = activity.autowork || {};
   const seeding = autowork.seeding || {};
   const pill = autowork.enabled === false
-    ? `<span class="pill warn">Autonomous work off${seeding.active ? ` · seeding ${num(seeding.rosterCount)} / ${num(seeding.target)}` : ""}</span>`
-    : `<span class="pill good">Autonomous work on</span>`;
-  return `<div class="page-head"><div><h1>Activity</h1><p>${num(activity.total)} pilots · ${num(summary.roster?.online)} online · ${num(summary.roster?.inSpace)} in space · ${num(summary.roster?.connectedHumans)} human pilots online</p></div>${pill}</div>`;
+    ? `<a class="pill warn" href="#settings">${icon("pause", { size: 16 })}Autonomous work off${seeding.active ? ` · seeding ${num(seeding.rosterCount)} / ${num(seeding.target)}` : ""}</a>`
+    : `<a class="pill good" href="#settings">${icon("bolt", { size: 16 })}Autonomous work on</a>`;
+  return pageHead("activity", "Activity", `What every pilot is doing right now, and why the rest are not working.`, pill);
+}
+
+function statsHtml(summary, trend) {
+  const roster = summary.roster || {};
+  const working = (activity.states || []).find((state) => state.id === "working");
+  const target = Number(roster.target) || 0;
+  return `<div class="stats">
+    ${stat("Pilots", num(roster.total), target ? `target ${num(target)}` : "", "cyan", "users", sparkline(trend.total))}
+    ${stat("Online", num(roster.online), `${num(roster.offline)} offline`, "green", "bolt", sparkline(trend.online))}
+    ${stat("In space", num(roster.inSpace), `${num(Number(roster.dockedAtStation || 0) + Number(roster.dockedAtStructure || 0))} docked`, "violet", "ship", sparkline(trend.inSpace))}
+    ${stat("Working", num(working ? working.count : 0), `${num(roster.connectedHumans)} capsuleer${Number(roster.connectedHumans) === 1 ? "" : "s"} online`, "amber", "briefcase", sparkline(trend.working))}
+  </div>`;
+}
+
+// An icon for each kind of work or reason the API reports.
+function jobIcon(id) {
+  const text = String(id || "").toLowerCase();
+  if (/mine|mining|ore|ice/.test(text)) return "ore";
+  if (/colony|planet|pi\b|pi-/.test(text)) return "planet";
+  if (/combat|security|patrol|war|pira|defen|escort|attack/.test(text)) return "target";
+  if (/upgrade|ship|fit/.test(text)) return "upgrade";
+  if (/mission|agent/.test(text)) return "briefcase";
+  if (/haul|transport|route|travel|reloc|deliver/.test(text)) return "ship";
+  if (/market|trade|sell|buy/.test(text)) return "hash";
+  if (/industry|manufact|build|struct|hq/.test(text)) return "cpu";
+  if (/cool|wait|retry|time/.test(text)) return "clock";
+  if (/pause|hold|recall/.test(text)) return "pause";
+  if (/offline|login|connect|rotation/.test(text)) return "bolt";
+  if (/fail|error|block/.test(text)) return "alert";
+  return "activity";
 }
 
 function noticesHtml(summary) {
@@ -24,17 +54,17 @@ function noticesHtml(summary) {
   const autowork = activity.autowork || {};
   const seeding = autowork.seeding || {};
   if (autowork.enabled === false) {
-    notes.push(`<div class="notice"><strong>Autonomous work is off.</strong> ${seeding.active
-      ? `The roster is seeding (${num(seeding.rosterCount)} of ${num(seeding.target)}), so pilots stand by. Turn work on in <a href="#settings"><u>Settings</u></a> when seeding finishes.`
-      : `Pilots only run orders you give them. Turn it on in <a href="#settings"><u>Settings</u></a>.`} Operations already running still finish.</div>`);
+    notes.push(notice(`<strong>Autonomous work is off.</strong> ${seeding.active
+      ? `The roster is seeding (${num(seeding.rosterCount)} of ${num(seeding.target)}), so pilots stand by. Turn work on in <a href="#settings">Settings</a> when seeding finishes.`
+      : `Pilots only run orders you give them. Turn it on in <a href="#settings">Settings</a>.`} Operations already running still finish.`));
   }
   const limit = Number(summary.systemCapacity?.autonomousBotsPerSystem) || 0;
   const crowded = (summary.systems || []).filter((s) => s.overAutonomousLimit);
   if (limit && crowded.length) {
     const extra = crowded.reduce((sum, s) => sum + Math.max(0, s.botCount - limit), 0);
-    notes.push(`<div class="notice info"><strong>${num(crowded.length)} systems hold more pilots than the per-system limit of ${num(limit)}</strong> (${num(extra)} over). New pilots are created in their race's starter system without checking the limit; the limit only stops pilots entering space there and makes the director move residents out when it assigns work. Expect the director to relocate about ${num(extra)} pilots, a batch at a time, once work starts. <a href="#world"><u>See systems</u></a>.</div>`);
+    notes.push(notice(`<strong>${num(crowded.length)} systems hold more pilots than the per-system limit of ${num(limit)}</strong> (${num(extra)} over). New pilots are created in their race's starter system without checking the limit; the limit only stops pilots entering space there and makes the director move residents out when it assigns work. Expect the director to relocate about ${num(extra)} pilots, a batch at a time, once work starts. <a href="#world">See systems</a>.`, "info"));
   }
-  if (activity.directorError) notes.push(`<div class="notice error"><strong>Director error:</strong> ${esc(activity.directorError)}</div>`);
+  if (activity.directorError) notes.push(notice(`<strong>Director error:</strong> ${esc(activity.directorError)}`, "error"));
   return notes.join("");
 }
 
@@ -42,11 +72,13 @@ function breakdownHtml() {
   const activities = activity.activities || [];
   const reasons = activity.reasons || [];
   const cooldowns = activity.cooldownReasons || [];
+  const top = Math.max(1, ...activities.map((a) => Number(a.count) || 0), ...reasons.map((r) => Number(r.count) || 0));
+  const bar = (count) => `<span class="bd-bar"><i style="width:${Math.max(2, Math.round((Number(count) || 0) * 100 / top))}%"></i></span>`;
   return `<div class="grid-2 top">
-    <div class="panel"><div class="panel-head"><div><h2>Working on</h2><p>Pilots working, travelling or holding, by job</p></div></div>
-      <div class="panel-body breakdown">${activities.map((a) => `<button type="button" data-activity="${esc(a.id)}" class="${roster.activity === a.id ? "on" : ""}"><span>${esc(a.label)}</span><b>${num(a.count)}</b></button>`).join("") || `<div class="empty">No pilot is working right now.</div>`}</div></div>
-    <div class="panel"><div class="panel-head"><div><h2>Why not working</h2><p>Everyone else, by reason</p></div></div>
-      <div class="panel-body breakdown">${reasons.map((r) => `<button type="button" data-reason="${esc(r.id)}" class="${roster.reason === r.id ? "on" : ""}"><span>${esc(r.label)}</span><b>${num(r.count)}</b>${r.id === "cooldown" && cooldowns.length ? `<span class="sub">${cooldowns.slice(0, 4).map((c) => `${num(c.count)} × ${esc(c.label)}`).join("<br>")}</span>` : ""}</button>`).join("") || `<div class="empty">Every pilot is busy.</div>`}</div></div>
+    <div class="panel"><div class="panel-head"><div><h2>${icon("briefcase")}Working on</h2><p>Pilots working, travelling or holding, by job. Click one to list them.</p></div></div>
+      <div class="panel-body breakdown">${activities.map((a) => `<button type="button" data-activity="${esc(a.id)}" class="${roster.activity === a.id ? "on" : ""}"><span class="bd-label">${icon(jobIcon(a.id), { size: 18 })}<span>${esc(a.label)}</span></span><b>${num(a.count)}</b>${bar(a.count)}</button>`).join("") || emptyState("briefcase", "No pilot is working right now")}</div></div>
+    <div class="panel"><div class="panel-head"><div><h2>${icon("clock")}Why not working</h2><p>Everyone else, by reason. Click one to list them.</p></div></div>
+      <div class="panel-body breakdown">${reasons.map((r) => `<button type="button" data-reason="${esc(r.id)}" class="${roster.reason === r.id ? "on" : ""}"><span class="bd-label">${icon(jobIcon(r.id), { size: 18 })}<span>${esc(r.label)}</span></span><b>${num(r.count)}</b>${bar(r.count)}${r.id === "cooldown" && cooldowns.length ? `<span class="sub">${cooldowns.slice(0, 4).map((c) => `${num(c.count)} × ${esc(c.label)}`).join("<br>")}</span>` : ""}</button>`).join("") || emptyState("check", "Every pilot is busy")}</div></div>
   </div>`;
 }
 
@@ -56,13 +88,13 @@ function directorHtml(summary) {
   const director = activity.director || {};
   const failures = activity.addonFailures || [];
   const parts = [
-    cycle ? `<span>Pilot steps this cycle <b>${num(cycle.completedBots)} / ${num(cycle.expectedBots)}</b> · ${esc(duration(cycle.elapsedMs))}</span>` : `<span>Last cycle <b>${num(work.cycleCompletedBots)} / ${num(work.cycleExpectedBots)}</b> steps${work.lastCycleAt ? ` · ${esc(rel(work.lastCycleAt))}` : ""}</span>`,
-    work.nextCycleAt ? `<span>Next cycle <b>${esc(rel(work.nextCycleAt))}</b></span>` : "",
-    `<span>Director last pass <b>${num(director.assigned)}</b> started · <b>${num(director.failures)}</b> failed</span>`,
-    `<span>Step failures <b>${num(work.addonFailedBots)}</b></span>`,
+    cycle ? `<span>${icon("refresh", { size: 17 })}Pilot steps this cycle <b>${num(cycle.completedBots)} / ${num(cycle.expectedBots)}</b> · ${esc(duration(cycle.elapsedMs))}</span>` : `<span>${icon("refresh", { size: 17 })}Last cycle <b>${num(work.cycleCompletedBots)} / ${num(work.cycleExpectedBots)}</b> steps${work.lastCycleAt ? ` · ${esc(rel(work.lastCycleAt))}` : ""}</span>`,
+    work.nextCycleAt ? `<span>${icon("clock", { size: 17 })}Next cycle <b>${esc(rel(work.nextCycleAt))}</b></span>` : "",
+    `<span>${icon("sparkle", { size: 17 })}Director last pass <b>${num(director.assigned)}</b> started · <b>${num(director.failures)}</b> failed</span>`,
+    `<span>${icon("alert", { size: 17 })}Step failures <b>${num(work.addonFailedBots)}</b></span>`,
   ].filter(Boolean);
   return `<div class="panel strip">${parts.join("")}</div>
-    ${failures.length ? `<div class="panel"><div class="panel-head"><h2>Needs attention</h2></div><div class="panel-body">${failures.map((f) => `<div><a href="#" data-open-pilot="${f.characterID}"><u>${esc(f.characterName)}</u></a>: ${esc(f.message)}</div>`).join("")}</div></div>` : ""}`;
+    ${failures.length ? `<div class="panel"><div class="panel-head"><h2>${icon("alert")}Needs attention</h2></div><div class="panel-body">${failures.map((f) => `<div style="margin-bottom:6px"><a href="#" data-open-pilot="${f.characterID}" style="color:var(--accent);font-weight:700">${esc(f.characterName)}</a>: ${esc(f.message)}</div>`).join("")}</div></div>` : ""}`;
 }
 
 // One draw at a time; a filter click during a refresh runs right after it.
@@ -71,8 +103,8 @@ const draw = coalesce(async (reloadRoster) => {
   const [nextActivity] = await Promise.all([getJSON("/api/activity"), reloadRoster ? loadRoster(roster) : null]);
   activity = nextActivity;
   if (!$("act-roster")) return;
-  $("act-head").innerHTML = headerHtml(summary) + noticesHtml(summary);
-  $("act-bar").innerHTML = `<div class="panel-head"><div><h2>State of every pilot</h2><p>Click a state to filter the list below</p></div></div><div class="panel-body">${stateBar(activity.states || [], { selected: [...roster.states] })}</div>`;
+  $("act-head").innerHTML = headerHtml(summary) + statsHtml(summary, ctxRef.store.trend) + noticesHtml(summary);
+  $("act-bar").innerHTML = `<div class="panel-head"><div><h2>${icon("layers")}State of every pilot</h2><p>Click a state to filter the list below</p></div></div><div class="panel-body">${stateBar(activity.states || [], { selected: [...roster.states] })}</div>`;
   $("act-breakdown").innerHTML = breakdownHtml();
   $("act-director").innerHTML = directorHtml(summary);
   const labels = {
@@ -94,7 +126,7 @@ function showRoster() {
 export async function render(ctx) {
   ctxRef = ctx;
   if (ctx.fresh || !$("act-roster")) {
-    $("view").innerHTML = `<div id="act-head"><div class="empty">Loading activity…</div></div><div id="act-bar" class="panel"></div><div id="act-breakdown"></div><div id="act-director"></div><div id="act-roster" class="panel"></div>`;
+    $("view").innerHTML = `<div id="act-head">${skeleton(2)}</div><div id="act-bar" class="panel"></div><div id="act-breakdown"></div><div id="act-director"></div><div id="act-roster" class="panel"></div>`;
     bindRoster($("act-roster"), roster, (reload) => draw(reload));
     $("act-bar").addEventListener("click", (event) => {
       const button = event.target.closest("[data-state]");

@@ -16,6 +16,8 @@ const MAX_TRADE_BUDGET_ISK = 1_000_000_000;
 const MAX_TRADE_QUANTITY = 100_000;
 const MAX_PLAYERBOT_SELL_ORDER_DAYS = 90;
 const MAX_TRADE_UNIT_PRICE_ISK = 1_000_000_000;
+// One Freighter or Jump Freighter hull (the dearest, an Ark, lists near 11B).
+const MAX_CAPITAL_HAULER_PRICE_ISK = 20_000_000_000;
 const activeTradeBots = new Set();
 // Jita keeps the only seeded market. Bots buy there only after checking for
 // non-Jita stock in the accessible region, but never sell there.
@@ -216,8 +218,9 @@ function resolveTradeAssetOwner(context, options = {}) {
     };
   }
   const sessionCorporationID = Number(context.session.corporationID || context.session.corpid) || 0;
-  const hangarDivision = Math.trunc(Number(options.hangarDivision) || 0);
-  const walletDivision = Math.trunc(Number(options.walletDivision) || 0);
+  // Corporation trading uses hangar 4 (Trade) unless a division is chosen.
+  const hangarDivision = Math.trunc(Number(options.hangarDivision) || 0) || 4;
+  const walletDivision = Math.trunc(Number(options.walletDivision) || 0) || 1;
   if (corporationID !== sessionCorporationID || hangarDivision < 1 || hangarDivision > 7 ||
       walletDivision < 1 || walletDivision > 7) {
     return { success: false, message: "The selected corporation, hangar division, or wallet division is not available to this bot." };
@@ -1064,16 +1067,24 @@ async function buy(botQuery, typeID, quantity, maxUnitPrice) {
 
   const normalizedQuantity = Math.trunc(Number(quantity));
   const normalizedPrice = normalizeIsk(maxUnitPrice);
-  if (!Number.isSafeInteger(normalizedQuantity) || normalizedQuantity <= 0 || normalizedQuantity > MAX_TRADE_QUANTITY) {
-    return { success: false, message: `Quantity must be between 1 and ${MAX_TRADE_QUANTITY.toLocaleString("en-US")} units.` };
+  // A Freighter or Jump Freighter hull costs more than the usual limits; one
+  // hull at a time may cost up to the capital hauler limit.
+  const capitalHauler = require("./playerBotTransportHulls").isSuperHauler(type.typeID);
+  const unitPriceLimit = capitalHauler ? MAX_CAPITAL_HAULER_PRICE_ISK : MAX_TRADE_UNIT_PRICE_ISK;
+  const budgetLimit = capitalHauler ? MAX_CAPITAL_HAULER_PRICE_ISK : MAX_TRADE_BUDGET_ISK;
+  if (!Number.isSafeInteger(normalizedQuantity) || normalizedQuantity <= 0 || normalizedQuantity > MAX_TRADE_QUANTITY ||
+      (capitalHauler && normalizedQuantity > 1)) {
+    return { success: false, message: capitalHauler
+      ? "Capital haulers are bought one hull at a time."
+      : `Quantity must be between 1 and ${MAX_TRADE_QUANTITY.toLocaleString("en-US")} units.` };
   }
-  if (!normalizedPrice || normalizedPrice > MAX_TRADE_UNIT_PRICE_ISK) {
-    return { success: false, message: `Maximum unit price must be between 0.01 and ${MAX_TRADE_UNIT_PRICE_ISK.toLocaleString("en-US")} ISK.` };
+  if (!normalizedPrice || normalizedPrice > unitPriceLimit) {
+    return { success: false, message: `Maximum unit price must be between 0.01 and ${unitPriceLimit.toLocaleString("en-US")} ISK.` };
   }
 
   const maxBudget = Math.round(normalizedPrice * normalizedQuantity * 100) / 100;
-  if (maxBudget > MAX_TRADE_BUDGET_ISK) {
-    return { success: false, message: `The maximum budget for this operation is ${MAX_TRADE_BUDGET_ISK.toLocaleString("en-US")} ISK; reduce the quantity or price.` };
+  if (maxBudget > budgetLimit) {
+    return { success: false, message: `The maximum budget for this operation is ${budgetLimit.toLocaleString("en-US")} ISK; reduce the quantity or price.` };
   }
   const balanceBefore = getCurrentBalance(context.bot.characterID);
   if (balanceBefore + 0.0001 < maxBudget) {

@@ -2042,6 +2042,8 @@ function destroyFleet(fleet, options = {}) {
 
 function disbandFleetIfOnlyPlayerBotsRemain(fleet) {
   if (!fleet || !(fleet.members instanceof Map) || fleet.members.size === 0) return false;
+  // Fleets the playerbots formed among themselves have no person by design.
+  if (fleet.playerBotOwned === true) return false;
   let botCharacterIDs;
   try {
     botCharacterIDs = new Set(require("../playerbots/playerBotRuntime").listBots()

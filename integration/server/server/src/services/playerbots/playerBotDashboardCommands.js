@@ -17,8 +17,8 @@ const ACTIONS = Object.freeze({
   combat: "Combat patrol",
   upgrade: "Upgrade ship",
 });
-const COMBAT_MODES = new Set(["security", "war", "piracy", "nullsec-conflict"]);
-const UPGRADE_ROLES = new Set(["mining", "logistics", "security", "piracy", "sovereignty"]);
+const COMBAT_MODES = new Set(["security", "war", "piracy", "nullsec-conflict", "gate-camp"]);
+const UPGRADE_ROLES = new Set(["mining", "logistics", "security", "piracy", "sovereignty", "trade"]);
 const STARTS = new Set(["mine", "colony", "combat", "upgrade", "resume-op"]);
 
 function positive(value) {

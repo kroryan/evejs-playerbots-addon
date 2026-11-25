@@ -73,6 +73,7 @@ function defaultDeps() {
     headquarters: () => require("./playerBotCorpCommands"),
     log: () => load("utils/logger"),
     store: defaultStore,
+    hangars: () => require("./playerBotCorpHangarRuntime"),
   };
 }
 
@@ -111,8 +112,15 @@ function getSettings(corporationID) {
   const division = positive(raw.division);
   return {
     enabled: typeof raw.enabled === "boolean" ? raw.enabled : null,
-    target: raw.target === "hangar" ? "hangar" : "deliveries",
+    // Corporation hangars by default: Deliveries cannot be opened in EveJS.
+    // Deliveries only when chosen by hand since then (older saves wrote it
+    // as the default).
+    target: raw.target === "deliveries" && raw.deliveriesChosen === true ? "deliveries" : "hangar",
+    deliveriesChosen: raw.deliveriesChosen === true,
     division: division >= 1 && division <= 7 ? division : 1,
+    // Without a chosen division each kind of work has its own
+    // (playerBotCorpHangarRuntime.js): mining 1, planetary 2.
+    explicitDivision: raw.target === "hangar" && division >= 1 && division <= 7,
   };
 }
 
@@ -120,8 +128,15 @@ function updateSettings(corporationID, patch) {
   const id = String(positive(corporationID));
   const merged = { ...getSettings(corporationID), ...patch };
   const next = { ...readSettings() };
-  if (merged.enabled === null && merged.target === "deliveries" && merged.division === 1) delete next[id];
-  else next[id] = { enabled: merged.enabled, target: merged.target, division: merged.division };
+  if (merged.enabled === null && merged.target === "hangar" && !merged.explicitDivision && patch.division === undefined) delete next[id];
+  else {
+    next[id] = {
+      enabled: merged.enabled,
+      target: merged.target,
+      division: patch.division !== undefined || merged.explicitDivision ? merged.division : 0,
+      deliveriesChosen: merged.deliveriesChosen === true,
+    };
+  }
   state.deps.store().write(next);
   state.settings = next;
   return getSettings(corporationID);
@@ -209,8 +224,19 @@ function shouldDeposit(operation) {
     positive(operation.corporationID));
 }
 
-function describeTarget(corporationID, depotStationID) {
+function describeTarget(corporationID, depotStationID, prepared = null) {
   const settings = getSettings(corporationID);
+  const deliveries = { locationID: positive(depotStationID), flagID: FLAG_CORP_DELIVERIES, label: "Corporation Deliveries" };
+  // The office hangar the hangar runtime prepared (roles granted, office
+  // rented, division by kind of work), unless a division was chosen by hand.
+  if (settings.target === "hangar" && prepared && prepared.locationID) {
+    const flagID = settings.explicitDivision ? FLAG_CORP_HANGAR_1 + settings.division - 1 : prepared.flagID;
+    return {
+      locationID: prepared.locationID, flagID,
+      label: settings.explicitDivision ? `corporation hangar division ${settings.division}` : prepared.label,
+      fallback: deliveries,
+    };
+  }
   if (settings.target === "hangar") {
     const offices = state.deps.corporations().getCorporationOffices(corporationID) || [];
     const office = offices.find((entry) => positive(entry && entry.stationID) === positive(depotStationID));
@@ -294,7 +320,15 @@ async function advance(operation, bot, kit) {
 
   if (dockedAt === depotID) {
     if (carried.length) inventory.unloadCargo(bot);
-    const target = describeTarget(corporationID, depotID);
+    let prepared = null;
+    if (getSettings(corporationID).target === "hangar") {
+      try {
+        prepared = await state.deps.hangars().prepareDeposit(bot, corporationID, depotID, operation.kind);
+      } catch (error) {
+        warn(`Hangar preparation failed for corporation ${corporationID}: ${error.message}`);
+      }
+    }
+    const target = describeTarget(corporationID, depotID, prepared);
     const stacks = goodsAt(depotID);
     if (stacks.length) {
       const moved = transferStacks(operation, stacks, target, kit);
@@ -357,7 +391,9 @@ function describeSettings(corporationID) {
     target: settings.target,
     division: settings.division,
     depot,
-    label: settings.target === "hangar" ? `corporation hangar division ${settings.division}` : "Corporation Deliveries",
+    label: settings.target === "deliveries" ? "Corporation Deliveries"
+      : settings.explicitDivision ? `corporation hangar division ${settings.division}`
+        : "corporation hangars by kind of work (1 Mining, 2 Planetary)",
   };
 }
 

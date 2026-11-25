@@ -1,8 +1,9 @@
 // History: the operation archive, newest first, with filters and details.
 
 import { getJSON } from "./api.js";
-import { $, esc, num, isk, when, emptyRow, pager, showDialog, coalesce, replaceKeepingFocus, corpLogo } from "./ui.js";
+import { $, esc, num, isk, when, pager, showDialog, coalesce, replaceKeepingFocus, corpLogo, pageHead, icon, emptyState, notice, toast, skeleton } from "./ui.js";
 import { openPilot } from "./drawer.js";
+import { downloadCSV, fetchAll, stamp } from "./csv.js";
 
 const state = { page: 0, pageSize: 50, status: "", kind: "", search: "", data: null };
 
@@ -28,9 +29,9 @@ const draw = coalesce(async () => {
     const kinds = Object.entries(data.kindCounts || {}).sort();
     const kindLabels = data.kindLabels || {};
     replaceKeepingFocus($("hist-filters"), `
-      <input class="field" type="search" data-h="search" placeholder="Pilot, operation ID or action" value="${esc(state.search)}" style="min-width:260px">
-      <select class="field" data-h="status"><option value="">All statuses</option>${statuses.map(([value, count]) => `<option value="${esc(value)}"${value === state.status ? " selected" : ""}>${esc(value)} (${num(count)})</option>`).join("")}</select>
-      <select class="field" data-h="kind"><option value="">All operation types</option>${kinds.map(([value, count]) => `<option value="${esc(value)}"${value === state.kind ? " selected" : ""}>${esc(kindLabels[value] || value)} (${num(count)})</option>`).join("")}</select>`);
+      <input class="field" type="search" data-h="search" placeholder="Pilot, operation ID or action" value="${esc(state.search)}" style="min-width:260px" aria-label="Search operations">
+      <select class="field" data-h="status" aria-label="Status"><option value="">All statuses</option>${statuses.map(([value, count]) => `<option value="${esc(value)}"${value === state.status ? " selected" : ""}>${esc(value)} (${num(count)})</option>`).join("")}</select>
+      <select class="field" data-h="kind" aria-label="Operation type"><option value="">All operation types</option>${kinds.map(([value, count]) => `<option value="${esc(value)}"${value === state.kind ? " selected" : ""}>${esc(kindLabels[value] || value)} (${num(count)})</option>`).join("")}</select>`);
     const rows = data.rows || [];
     $("hist-table").innerHTML = `<div class="table-wrap"><table>
       <thead><tr><th>Updated</th><th>Pilot</th><th>Operation</th><th>Status</th><th>Where</th><th>Last step</th><th class="num">ISK</th><th></th></tr></thead>
@@ -39,14 +40,15 @@ const draw = coalesce(async () => {
         const proceeds = Number(op.proceeds) || 0;
         return `<tr>
         <td class="nowrap">${when(op.updatedAt) || "—"}</td>
-        <td><a href="#" data-pilot="${op.characterID}"><strong>${esc(op.characterName || `Pilot ${op.characterID}`)}</strong></a><span class="sub">${corpLogo(op.corporationID, 14, "corp-logo inline")}${op.corporationTicker ? `[${esc(op.corporationTicker)}] ` : ""}${esc(op.corporationName || "")}</span></td>
+        <td><a href="#" data-pilot="${op.characterID}" class="link-strong"><strong>${esc(op.characterName || `Pilot ${op.characterID}`)}</strong></a><span class="sub">${corpLogo(op.corporationID, 14, "corp-logo inline")}${op.corporationTicker ? `[${esc(op.corporationTicker)}] ` : ""}${esc(op.corporationName || "")}</span></td>
         <td><strong>${esc(op.kindLabel || op.kind)}</strong>${op.stageLabel ? `<span class="sub">${esc(op.stageLabel)}</span>` : ""}</td>
         <td><span class="state ${statusClass(op.status)}">${esc(op.status)}</span></td>
         <td>${esc(op.systemName || (op.systemID ? `System ${op.systemID}` : "—"))}${op.shipName ? `<span class="sub">${esc(op.shipName)}</span>` : ""}</td>
-        <td><span class="sub" style="color:var(--soft);max-width:340px" title="${esc(op.lastAction || op.lastError || "")}">${esc(op.lastAction || op.lastError || "—")}</span></td>
-        <td class="num nowrap">${spent ? `<span style="color:#ffaab1">−${esc(isk(spent))}</span>` : ""}${spent && proceeds ? "<br>" : ""}${proceeds ? `<span style="color:#8ce7c2">+${esc(isk(proceeds))}</span>` : ""}${!spent && !proceeds ? "—" : ""}</td>
-        <td><button class="btn small" type="button" data-op="${esc(op.operationID)}">Details</button></td></tr>`;
-      }).join("") || emptyRow(8, "No operations match these filters.")}</tbody></table></div>
+        <td><span class="sub" style="color:var(--text-2);max-width:340px" title="${esc(op.lastAction || op.lastError || "")}">${esc(op.lastAction || op.lastError || "—")}</span></td>
+        <td class="num nowrap">${spent ? `<span class="isk-out">−${esc(isk(spent))}</span>` : ""}${spent && proceeds ? "<br>" : ""}${proceeds ? `<span class="isk-in">+${esc(isk(proceeds))}</span>` : ""}${!spent && !proceeds ? "—" : ""}</td>
+        <td><button class="btn small" type="button" data-op="${esc(op.operationID)}">${icon("info", { size: 16 })}<span>Details</span></button></td></tr>`;
+      }).join("")}</tbody></table></div>
+      ${rows.length ? "" : emptyState("history", "No operations match these filters", state.search || state.status || state.kind ? "Try clearing a filter." : "Operations appear here as pilots start work.")}
       ${pager(state.page, state.pageSize, Number(data.total) || 0, "hist")}`;
   }
 });
@@ -83,14 +85,45 @@ async function showOperation(operationID) {
       <details style="margin-top:14px"><summary class="muted">Full record (${esc(op.operationID || operationID)})</summary>
         <div class="detail-grid" style="margin-top:8px">${fields.map((key) => `<div class="detail-row"><span>${esc(key)}</span><strong>${esc(raw(op[key]))}</strong></div>`).join("")}</div></details>`);
   } catch (error) {
-    showDialog("Operation", `<div class="notice error">${esc(error.message)}</div>`);
+    showDialog("Operation", notice(esc(error.message), "error"));
   }
 }
 
 export async function render(ctx) {
   if (ctx.fresh || !$("hist-table")) {
-    $("view").innerHTML = `<div class="page-head"><div><h1>History</h1><p>Every operation, live and archived, newest first.</p></div></div>
-      <div class="panel"><div class="panel-body" style="padding-top:14px"><div class="toolbar" id="hist-filters"></div></div><div id="hist-table"><div class="empty">Loading…</div></div></div>`;
+    $("view").innerHTML = `${pageHead("history", "History", "Every operation, live and archived, newest first.", `<button class="btn" type="button" id="hist-export" title="Download every operation matching these filters">${icon("download")}<span>Export CSV</span></button>`)}
+      <div class="panel"><div class="panel-body" style="padding-top:14px"><div class="toolbar" id="hist-filters"></div></div><div id="hist-table">${skeleton(1)}</div></div>`;
+    $("hist-export").addEventListener("click", async (event) => {
+      const button = event.currentTarget;
+      button.disabled = true;
+      try {
+        const query = new URLSearchParams();
+        if (state.status) query.set("status", state.status);
+        if (state.kind) query.set("kind", state.kind);
+        if (state.search) query.set("search", state.search);
+        const rows = await fetchAll("/api/operations", query);
+        downloadCSV(`playerbots-operations-${stamp()}.csv`, [
+          { label: "Operation ID", value: (r) => r.operationID },
+          { label: "Updated", value: (r) => r.updatedAt },
+          { label: "Pilot", value: (r) => r.characterName },
+          { label: "Character ID", value: (r) => r.characterID },
+          { label: "Corporation", value: (r) => r.corporationName },
+          { label: "Operation", value: (r) => r.kindLabel || r.kind },
+          { label: "Status", value: (r) => r.status },
+          { label: "Stage", value: (r) => r.stageLabel || r.stage },
+          { label: "System", value: (r) => r.systemName },
+          { label: "Ship", value: (r) => r.shipName },
+          { label: "ISK spent", value: (r) => Number(r.spent) || 0 },
+          { label: "ISK earned", value: (r) => Number(r.proceeds) || 0 },
+          { label: "Last step", value: (r) => r.lastAction || r.lastError },
+        ], rows);
+        toast(`Downloaded ${num(rows.length)} operation${rows.length === 1 ? "" : "s"} as CSV.`, "good");
+      } catch (error) {
+        toast(`Could not export: ${error.message}`, "bad");
+      } finally {
+        button.disabled = false;
+      }
+    });
     let timer = null;
     $("hist-filters").addEventListener("input", (event) => {
       if (event.target.dataset.h !== "search") return;

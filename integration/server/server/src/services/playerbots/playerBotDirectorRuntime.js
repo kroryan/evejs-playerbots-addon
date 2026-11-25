@@ -190,6 +190,11 @@ function setEnabled(enabled) {
 
 function isBusy(characterID) {
   if (require("./playerBotLocalDefenseAdapter").hasLease(characterID)) return true;
+  // A bot a fleet commander has put on fleet duty takes no director work,
+  // including while it fetches a ship for the fleet.
+  try {
+    if (require("./playerBotFleetCommandRuntime").isEnrolled(characterID)) return true;
+  } catch (_) { /* fleet duty unavailable: the director keeps the pilot */ }
   const interruptions = require("./playerBotInterruptRuntime");
   if (interruptions.isBusy(characterID) || interruptions.hasPending(characterID)) return true;
   const operations = require("./playerBotOperationRuntime");
@@ -212,7 +217,7 @@ function isBusy(characterID) {
     }) &&
     !operation?.pending && operation?.kind !== "structure-deployment" &&
     operation?.kind !== "structure-procurement" &&
-    !["combat", "sovereignty", "alliance-courier", "fleet-attack"].includes(operation?.kind) &&
+    !["combat", "sovereignty", "alliance-courier", "fleet-attack", "fleet-duty"].includes(operation?.kind) &&
     !(operation?.kind === "pi-collect" && (Number(operation.containerID) > 0 || operation.exportAttempt));
   if (headquartersNeeded) return false;
   const cycle = require("./playerBotIndustryCycleRuntime").getCycle(characterID);
@@ -471,7 +476,7 @@ function clearColonySetupAssignment(characterID) {
 
 function isProductiveWorkEntry(entry) {
   return entry.source === "cycle" ||
-    ["mine", "sell", "haul", "fulfill", "pi-collect", "combat", "sovereignty", "alliance-courier", "structure-procurement", "structure-deployment", "structure-core-install", "structure-service-provision"]
+    ["mine", "sell", "haul", "fulfill", "trade-run", "pi-collect", "combat", "sovereignty", "alliance-courier", "structure-procurement", "structure-deployment", "structure-core-install", "structure-service-provision"]
       .includes(entry.kind);
 }
 
@@ -606,6 +611,9 @@ function selectWorkToPause(entries, limit, protectedEntries = new Set(), humanCo
     workStagePriority(right) - workStagePriority(left) ||
     (Date.parse(left.work.createdAt || "") || 0) - (Date.parse(right.work.createdAt || "") || 0));
   const protectedWork = new Set([
+    // Work a human fleet commander gave is never queued for capacity: a
+    // queued pilot is taken out of space and would lose its fleet.
+    ...prioritized.filter((entry) => ["fleet-duty", "fleet-follow", "fleet-attack"].includes(String(entry.kind || ""))),
     ...prioritized.filter(isFiniteDestinationWork),
     ...prioritized.filter((entry) => protectedEntries.has(entry)),
     ...prioritized.filter((entry) => humanControlledBotIDs.has(Number(entry.characterID))),
@@ -1170,6 +1178,56 @@ function findCoreInstallPlan(structureRuntime, bot) {
     : null;
 }
 
+// Security pilots camp their headquarters system's gates while their
+// corporation is at war or has hostiles about, a few at a time.
+const MAX_GATE_CAMPERS = 3;
+function gateCampWanted(bot, operations) {
+  let home = null;
+  try { home = require("./playerBotHomeBaseRuntime").gateCampBase(bot); } catch (_) { home = null; }
+  if (!home || !home.success) return false;
+  const corporationID = Number(bot.corporationID) || 0;
+  let threatened = false;
+  try { threatened = require("../corporation/warRuntimeState").hasActiveWarForCharacter(bot.characterID); } catch (_) { threatened = false; }
+  if (!threatened) {
+    try {
+      threatened = require("./playerBotGrievanceRuntime").hasActiveHostiles(corporationID);
+    } catch (_) { threatened = false; }
+  }
+  if (!threatened) return false;
+  const active = typeof operations.listActiveOperationRecords === "function"
+    ? operations.listActiveOperationRecords()
+    : typeof operations.listActiveOperations === "function" ? operations.listActiveOperations() : [];
+  const campers = active.filter((operation) => operation && operation.kind === "combat" && operation.mode === "gate-camp" &&
+    Number(operation.corporationID) === corporationID && Number(operation.characterID) !== Number(bot.characterID)).length;
+  return campers < MAX_GATE_CAMPERS;
+}
+
+// A trader's next job: a better hauler when it can afford one, else a trade
+// run when its hub needs stock. null keeps a hauler pilot docked (it never
+// swaps to a mining ship); undefined means it has no hauler yet.
+const TRADE_RUN_COOLDOWN_MS = 30 * 60 * 1000;
+function chooseTradeAssignment(bot, options, balance, operations) {
+  const upgrade = typeof operations.nextShipUpgrade === "function" ? operations.nextShipUpgrade(bot, "trade") : null;
+  const lastOperation = typeof operations.getOperation === "function" ? operations.getOperation(bot.characterID) : null;
+  if (options.skipUpgrade !== true && upgrade && balance >= Number(upgrade.minBalance) &&
+      !upgradeCoolingDown(lastOperation)) {
+    return {
+      kind: "upgrade",
+      role: "trade",
+      marketStationID: typeof operations.findUpgradeMarketStation === "function"
+        ? operations.findUpgradeMarketStation(bot, upgrade)
+        : hubStationFor(bot),
+    };
+  }
+  if (typeof operations.hasRoleShipFit !== "function" || !operations.hasRoleShipFit(bot, "trade")) return undefined;
+  const ranRecently = lastOperation && lastOperation.kind === "trade-run" &&
+    Date.now() - (Date.parse(lastOperation.updatedAt || lastOperation.createdAt || "") || 0) < TRADE_RUN_COOLDOWN_MS;
+  if (ranRecently) return null;
+  let plan = null;
+  try { plan = require("./playerBotTradeRunRuntime").planTradeRun(bot); } catch (_) { plan = null; }
+  return plan ? { kind: "trade-run", plan } : null;
+}
+
 function chooseMiningAssignment(bot, options = {}) {
   const operations = require("./playerBotOperationRuntime");
   const hasMiningFit = typeof operations.hasRoleShipFit === "function" &&
@@ -1307,6 +1365,13 @@ function chooseAssignment(bot, options = {}) {
   }
   const structurePackage = packageItem;
   if (structurePurchasePlan) return { kind: "structure-procurement", plan: structurePurchasePlan };
+  // Between jobs, a pilot far from its corporation's headquarters flies home
+  // first, so its next job is found around home (playerBotHomeBaseRuntime.js).
+  if (!options.prioritizeHeadquarters && options.skipReturnHome !== true) {
+    let homeward = null;
+    try { homeward = require("./playerBotHomeBaseRuntime").chooseReturnHome(bot); } catch (_) { homeward = null; }
+    if (homeward) return homeward;
+  }
   if (bot.specialty !== "security") {
     const warRuntime = require("./playerBotWarMobilizationRuntime");
     const warAssignment = warRuntime.getActiveWarCombatAssignment(bot);
@@ -1421,6 +1486,12 @@ function chooseAssignment(bot, options = {}) {
     return { kind: "industry", runs: INDUSTRY_MAX_RUNS, maxSpend,
       ...(facility ? { facilityID: facility.facilityID } : {}) };
   }
+  // Traders climb the hauler ladder and run goods to their hub; until they
+  // own a hauler they work like everyone else.
+  if (bot.specialty === "trade") {
+    const tradeAssignment = chooseTradeAssignment(bot, options, balance, operations);
+    if (tradeAssignment !== undefined) return tradeAssignment;
+  }
   // Complete a mining assignment after fitting its ship before reconsidering a combat hull.
   if (options.prioritizeProductiveWork === true ||
       (lastOperation?.kind === "upgrade" && lastOperation.role === "mining" &&
@@ -1469,6 +1540,10 @@ function chooseAssignment(bot, options = {}) {
         return { kind: "combat", mode: "nullsec-conflict" };
       }
     }
+    if (bot.specialty === "security" && gateCampWanted(bot, operations) &&
+        !combatCoolingDown(operations.getOperation(bot.characterID))) {
+      return { kind: "combat", mode: "gate-camp" };
+    }
     if (combatCoolingDown(operations.getOperation(bot.characterID))) return chooseMiningAssignment(bot, options);
     return { kind: "combat", mode: atWar ? "war" : bot.specialty };
   }
@@ -1507,7 +1582,7 @@ function countProductiveBots(corporationID) {
 function getProductiveBotCountsByCorporation(corporationIDs, entries = listActiveWorkEntries()) {
   const productive = new Map([...corporationIDs].map((id) => [Number(id), new Set()]));
   const productiveKinds = new Set([
-    "mine", "sell", "haul", "fulfill", "pi-collect", "combat", "agent-mission", "sovereignty",
+    "mine", "sell", "haul", "fulfill", "trade-run", "pi-collect", "combat", "agent-mission", "sovereignty",
     "alliance-courier", "structure-procurement", "structure-deployment",
     "structure-core-install", "structure-service-provision",
   ]);
@@ -1525,14 +1600,14 @@ function getProductiveBotCountsByCorporation(corporationIDs, entries = listActiv
 
 function isProductiveAssignment(assignment) {
   return assignment.headquarters === true || assignment.headquartersStructureUpgrade === true ||
-    ["mine", "industry", "sell", "haul", "fulfill", "pi-collect", "combat", "sovereignty",
+    ["mine", "industry", "sell", "haul", "fulfill", "trade-run", "pi-collect", "combat", "sovereignty",
       "alliance-courier", "alliance-founding", "structure-procurement", "structure-deployment", "structure-core-install", "structure-service-provision", "order-build", "order-courier"]
       .includes(assignment.kind);
 }
 
 async function runDirectorInternal(bots = [], options = {}) {
   const summary = { enabled: isEnabled(), active: 0, assigned: 0, mine: 0, industry: 0, upgrade: 0,
-    sell: 0, "order-courier": 0, "order-build": 0, "alliance-courier": 0, "structure-procurement": 0, "structure-deployment": 0, "structure-core-install": 0, "structure-service-provision": 0, colony: 0,
+    sell: 0, "trade-run": 0, "order-courier": 0, "order-build": 0, "alliance-courier": 0, "structure-procurement": 0, "structure-deployment": 0, "structure-core-install": 0, "structure-service-provision": 0, colony: 0,
     "alliance-founding": 0, combat: 0, "agent-mission": 0, sovereignty: 0, relocate: 0, activeRelocations: 0,
     recoveredColonyReviews: 0, recoveredLegacyPIExports: 0, capsuleRecoveries: 0, structureConflictWarsDeclared: 0,
     firstWarGrants: 0, warShipBudgetsFunded: 0, warPilotsRecruited: 0, failures: 0 };
@@ -1709,6 +1784,31 @@ async function runDirectorInternal(bots = [], options = {}) {
         `[PlayerBots] Bot rivalry war planning was skipped: ${String(error && error.message || error).slice(0, 180)}.`,
       );
     }
+    // Corporations attacked again and again declare war on the aggressor.
+    try {
+      const grievanceWar = await require("./playerBotGrievanceRuntime")
+        .declareGrievanceWars(allRosterBots, { humanControlledBotIDs });
+      if (grievanceWar.declared) summary.grievanceWarsDeclared = 1;
+    } catch (error) {
+      require("../../utils/logger").warn(
+        `[PlayerBots] Grievance war planning was skipped: ${String(error && error.message || error).slice(0, 180)}.`,
+      );
+    }
+    // Every bot may use its corporation's hangars 1-5 (bot and player corps).
+    try {
+      require("./playerBotCorpHangarRuntime").grantRolesToRoster(allRosterBots);
+    } catch (error) {
+      require("../../utils/logger").warn(`[PlayerBots] Hangar roles were skipped: ${String(error && error.message || error).slice(0, 180)}.`);
+    }
+    // Corporations band together into alliances (dashboard plans, shared
+    // enemies, or by empire at population, per the alliance mode setting).
+    try {
+      await require("./playerBotAllianceFormationRuntime").maintain(allRosterBots);
+    } catch (error) {
+      require("../../utils/logger").warn(
+        `[PlayerBots] Alliance formation was skipped: ${String(error && error.message || error).slice(0, 180)}.`,
+      );
+    }
   }
   budget.switchStage("roster-indexes");
   await budget.checkpoint();
@@ -1815,7 +1915,7 @@ async function runDirectorInternal(bots = [], options = {}) {
       require("./playerBotStructureWorkPolicy").shouldPauseForHeadquartersWork({
         headquartersWorkCanStart: true,
         protectedOperation: operation.pending ||
-          ["combat", "sovereignty", "alliance-courier", "fleet-attack"].includes(operation.kind) ||
+          ["combat", "sovereignty", "alliance-courier", "fleet-attack", "fleet-duty"].includes(operation.kind) ||
           operation.kind === "pi-collect" && (Number(operation.containerID) > 0 || operation.exportAttempt),
         hasStructurePackage: Boolean(require("./playerBotStructureRuntime").findStructurePackage(bot)),
         hasPurchasePlan: Boolean(require("./playerBotStructureRuntime").findAutonomousPurchasePlan(bot)),
@@ -1941,7 +2041,7 @@ async function runDirectorInternal(bots = [], options = {}) {
     const headquartersOperation = operationRuntime.getOperation(bot.characterID);
     const headquartersWorkCanStart = headquartersStructure &&
       !headquartersOperation?.pending &&
-      !["combat", "sovereignty", "alliance-courier", "fleet-attack"].includes(headquartersOperation?.kind) &&
+      !["combat", "sovereignty", "alliance-courier", "fleet-attack", "fleet-duty"].includes(headquartersOperation?.kind) &&
       !(headquartersOperation?.kind === "pi-collect" &&
         (Number(headquartersOperation.containerID) > 0 || headquartersOperation.exportAttempt));
     const corporateHQDepot = headquartersWorkCanStart
@@ -2243,6 +2343,8 @@ async function runDirectorInternal(bots = [], options = {}) {
           } : {}) })
       : assignment.kind === "agent-mission"
       ? operationRuntime.startAgentMission(bot.characterName, assignment.plan)
+      : assignment.kind === "trade-run"
+      ? operationRuntime.startTradeRun(bot.characterName, assignment.plan)
       : assignment.kind === "combat"
       ? require("./playerBotOperationRuntime").startCombat(bot.characterName, assignment.mode, {
         autonomous: true,
@@ -2253,7 +2355,7 @@ async function runDirectorInternal(bots = [], options = {}) {
       : assignment.kind === "sovereignty"
       ? require("./playerBotSovereigntyRuntime").startOperation(bot.characterName, assignment.objective, { autonomous: true })
       : assignment.kind === "relocate"
-      ? operationRuntime.startRelocation(bot.characterName, assignment.stationID)
+      ? operationRuntime.startRelocation(bot.characterName, assignment.stationID, assignment.home === true ? { home: true } : {})
       : assignment.kind === "mine" && assignment.territorialBase
       ? operationRuntime.startMining(bot.characterName, MINING_TRIPS_PER_ASSIGNMENT, {
         autonomous: true,

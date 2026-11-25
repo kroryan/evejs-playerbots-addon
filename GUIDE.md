@@ -7,7 +7,7 @@ dashboard's built-in **Guide** page covers the same ground in shorter form.
 
 **Contents:** [Running the server](#running-the-server) ·
 [Roster and population](#roster-and-population) ·
-[The dashboard](#the-dashboard) · [Chat commands](#chat-commands) ·
+[The dashboard](#the-dashboard) · [Chat commands](#chat-commands) ([command reference](#command-reference)) ·
 [How the bots work](#how-the-bots-work) ·
 [Recovery and safety](#recovery-and-safety) ·
 [Performance and capacity](#performance-and-capacity) ·
@@ -280,6 +280,11 @@ it is set in the add-on environment file (`.env`). **Reset to defaults** puts
 every field back to its default and saves, after a confirmation; the page
 then reads the settings back and reports anything that was not applied.
 
+The **Headquarters** panel holds Stay within (jumps of HQ, default 5),
+Risk tolerance (default 2, null-sec) and Alliance mode (default 1, karma);
+the **Bot fleets** panel holds Bot fleets on/off, Bot fleets at once (20) and
+Pilots per bot fleet (5). Each is explained in its own section below.
+
 ### Where bots live
 
 Each new bot gets a race, a bloodline of that race and one of the race's
@@ -302,19 +307,38 @@ on the EveJS host, or use the SSH tunnel below. The dashboard can command
 pilots and corporations, so publish it more widely
 (`EVEJS_PLAYER_BOTS_DASHBOARD_BIND=0.0.0.0`) only on a trusted network.
 
-The dashboard has six pages. **Activity** shows one state per pilot (working,
+The dashboard has ten pages, grouped in the menu as Monitor, Manage and Help. **Activity** shows one state per pilot (working,
 travelling, holding, queued, cooling down, paused, standing by, idle,
 offline), what each pilot is doing in plain words, and why the rest are not
 working, with a pilot panel that gives per-pilot orders (pause, resume, stop
 or resume an operation, mine, PI colony, combat patrol, ship upgrade, recall
 to the corporation HQ). **Corporations** lists bot corporations and opens a
-page per corporation with its HQ, output deposit, priorities, orders (recall,
-send to work, pause, resume, cancel), a selectable pilot roster for orders to
-chosen pilots, and a command log. Recall and work orders, from the dashboard
+page per corporation with tabs: Overview (HQ, output deposit, priorities,
+orders: recall, send to work, pause, resume, cancel), Pilots (a selectable
+roster for orders to chosen pilots), Logo, and Command log. Recall and work orders, from the dashboard
 or `/bots corp`, are saved and re-issued about a minute after a restart
-(`EVEJS_PLAYER_BOTS_ORDER_RESTORE_DELAY_MS`). **History** is the operation
-archive, **World** holds systems, territory and the killboard, and
-**Performance** and **Settings** are as described below.
+(`EVEJS_PLAYER_BOTS_ORDER_RESTORE_DELAY_MS`). **Alliances** lists bot alliances and alliance plans and sets up new ones
+(see [Bot alliances](#bot-alliances)). **Fleets** puts the bots in your
+in-game fleet to work and shows the bots' own fleets (see
+[Fleet duty](#fleet-duty-dashboard-fleets-page)). **Reputation** lists
+grievances, hostility, wars and the bots' security status (see
+[Grievances, hostility and war](#grievances-hostility-and-war)). **History**
+is the operation archive, **World** holds systems, territory and the
+killboard, and **Performance** and **Settings** are as described below.
+
+The dashboard is black by default with an optional white mode, and works on a
+phone. Across every page: <kbd>Ctrl</kbd> <kbd>K</kbd> searches pilots,
+corporations, pages, guide topics and commands; <kbd>G</kbd> then a letter
+opens a page (<kbd>A</kbd> Activity, <kbd>W</kbd> World, <kbd>H</kbd>
+History, <kbd>P</kbd> Performance, <kbd>C</kbd> Corporations, <kbd>N</kbd>
+Alliances, <kbd>F</kbd> Fleets, <kbd>R</kbd> Reputation, <kbd>S</kbd>
+Settings, <kbd>G</kbd> Guide); <kbd>R</kbd> refreshes, <kbd>L</kbd> pauses
+live updates, <kbd>W</kbd> shows or hides the watch panel, <kbd>T</kbd>
+switches black and white mode and <kbd>?</kbd> lists every shortcut. The
+watch panel on wide screens shows the server at a glance, pinned pilots and
+the latest operations. The pilot list and History export the current filters
+as CSV. Theme, refresh interval and pinned pilots are kept in the browser's
+local storage; nothing is sent to the server.
 
 Killboard ship renders are fetched from the official EVE image service by a
 size-limited same-origin dashboard proxy. This avoids mixed-origin and
@@ -397,8 +421,10 @@ active. The basic template is `doc/name-library-template.json` in the source
 repository. Each empire (`amarr`, `caldari`, `gallente`, `minmatar`) has just
 two arrays, `corporations` and `alliances`, containing ASCII names.
 
-Empty arrays keep original naming. Nonempty arrays are used in order when
-new organizations are founded, skipping occupied names and abbreviations.
+Empty arrays keep original naming. Alliances founded automatically take
+famous science-fiction names first (see [Bot alliances](#bot-alliances)) and
+use the `alliances` arrays only when none of those are free. Nonempty arrays
+are used in order when new organizations are founded, skipping occupied names and abbreviations.
 If none remain, add more names; numeric suffixes are not added to custom
 names. Existing organizations and pending alliance plans are left alone.
 The founder's race selects the naming style; specialties, membership and
@@ -410,6 +436,56 @@ its resolved persistent GameStore root. Preserve that file with the server's
 data backups. Saving an empty template restores original naming for future
 organizations. The dashboard uses its existing management access boundary;
 this is not an anonymous public upload service.
+
+### Fleet duty (dashboard Fleets page)
+
+The person leading a fleet (the fleet commander, or FC) can put the fleet's
+bots to work from the dashboard's **Fleets** page:
+
+1. Form a fleet in game and add bots with `/playerbots fleet add <bot>`.
+2. On **Fleets**, choose the kind of fleet: **Mining**, **Combat**,
+   **Hauling** or **Escort**, and optionally a saved fitting for it.
+3. Press **Start fleet duty** (tick bots first to use only some of them).
+
+Each bot then:
+
+| Step | What it does |
+| --- | --- |
+| Fit up | A bot whose ship cannot do the job fetches one: the FC's saved fitting if set, otherwise the built-in Playerbots fit (an owned hull is reused where possible). After two failed tries it follows the FC without working. |
+| Meet the FC | Travels to the FC's system and docks where the FC is docked. |
+| Undock | Undocks within a few seconds of the FC. |
+| Warp | Recalls drones and warps to the FC once the FC lands. |
+| Work | **Mining:** lasers and mining drones; a hold over 90% full goes into the FC's fleet hangar (the FC must allow fleet access), otherwise into a jet can next to the FC. **Combat:** the FC's locked target, then every rat on grid, with drones, fighters and guns. **Hauling:** empties fleet members' jet cans and delivers to the FC's fleet hangar, in space or docked together. **Escort:** stays within 2.5 km of the FC and fights rats within 30 km. |
+| Stay alive | A badly damaged bot docks at the nearest station, repairs and rejoins. |
+
+Bots on fleet duty get no director work, are never queued for work capacity,
+and stay connected. **Stand down** ends the duty for every bot; it also ends
+when a bot leaves the fleet or the FC has been offline for 15 minutes. **Call
+in busy bots** stops the bots' own work so they join now. The FC's choices are
+saved per FC and apply to the next fleet they lead. Fleets do not survive a
+server restart, so form the fleet again after one.
+
+### Bot-led fleets
+
+Bot corporations also form fleets on their own. About once a minute, a bot
+already mining from a station or ratting (security patrol) in a system becomes
+fleet commander and brings in up to four corpmates: other miners working from
+the same station, and idle corpmates docked in that system with a ship for the
+job. The corpmates fly fleet duty behind the commander as above. The commander
+waits for its pilots before undocking (up to 2 minutes) or warping off (up to 1
+minute). Without a fleet hangar, full miners stay with the commander and unload
+into their own hangars when the fleet docks. A fleet breaks up when the
+commander's job ends, it is offline for 5 minutes, its pilots leave, or after
+about three hours. The dashboard shows these fleets read-only.
+
+**Escorts for capital haulers.** A trader flying a Freighter or Jump Freighter
+that sets off on a haul (a trade run, an order delivery, a sale, a haul or a
+courier contract) leads an escort fleet: up to four combat corpmates, first
+idle ones docked within three jumps, then security pilots on their way to a
+patrol, who drop it. The hauler waits for its escort to dock with it before
+undocking (up to 5 minutes) and, in each system on the route, for the escort
+to catch up before it takes the next gate (up to 90 seconds). Bot-led mining
+and combat fleets wait at gates too, for up to a minute.
 
 ## Chat commands
 
@@ -430,6 +506,110 @@ without a login. Activity shows what every pilot is doing and why the rest are
 not working; Corporations gives recall, work, HQ, deposit, priority and
 per-pilot orders; History, World (systems, territory, killboard), Performance
 and Settings cover the rest. See [The dashboard](#the-dashboard).
+
+### Command reference
+
+Every chat command in one place, grouped as on the dashboard's Guide page.
+`<bot>` is a bot's name or character ID. Commands that change a bot work on
+bots in your corporation or fleet; staff can command any bot. Commands marked
+CEO/staff or staff need that authority. The sections after this one explain
+each group in detail. Fleet duty, bot alliances and reputation are run from
+the dashboard (Fleets, Alliances and Reputation pages) and have no chat
+command; trade hauler upgrades and gate camps use `upgrade ... trade` and
+`combat ... gate-camp`.
+
+**Roster and status**
+
+| Command | What it does |
+| --- | --- |
+| `/playerbots status` | Roster size, target and corporation counts |
+| `/playerbots list [filter]` | Pilots with specialty and corporation |
+| `/playerbots inspect <bot>` | Everything about one bot (e.g. `/playerbots inspect Zara Vex`) |
+| `/playerbots ops [page]` | Live roster, 10 pilots per page (e.g. `/playerbots ops 1`) |
+| `/playerbots ops systems [page]` | Totals per solar system |
+| `/playerbots ops [page] system <systemID>` | Pilots in one system (e.g. `/playerbots ops 1 system 30000142`) |
+| `/playerbots tasks [queued\|leased\|completed\|failed\|canceled]` | Saved work tasks |
+| `/playerbots orders` | Player buy orders bots can fill |
+| `/botlocal [all]` | Bots in your system, or everywhere |
+| `/playerbots seed [30-15000]` | Set the roster target and start seeding (staff) (e.g. `/playerbots seed 1000`) |
+
+**Directing work**
+
+| Command | What it does |
+| --- | --- |
+| `/playerbots autowork [status\|on\|off]` | Show or switch automatic work (on/off: staff) |
+| `/playerbots pause <bot>` | Pause one bot |
+| `/playerbots resume <bot>` | Resume one bot |
+| `/playerbots corp pause` | Pause the bots in your corporation |
+| `/playerbots corp resume` | Resume the bots in your corporation |
+| `/playerbots op status\|stop\|resume <bot>` | Check, stop or resume a bot's current job (e.g. `/playerbots op status Zara Vex`) |
+| `/playerbots mine <bot> [trips] [station <id>] [norefine] [nosell]` | Go mining (e.g. `/playerbots mine Zara Vex 3`) |
+| `/playerbots colony <bot>` | Set up a PI colony |
+| `/playerbots haul <bot> <itemID\|typeID> <from> <to> [quantity]` | Move goods between stations |
+| `/playerbots upgrade <bot> [mining\|logistics\|security\|piracy\|sovereignty\|trade] [force]` | Buy and fit the next ship on a ladder (trade: the hauler line up to the Jump Freighter) (e.g. `/playerbots upgrade Zara Vex mining`) |
+| `/playerbots route <bot> <system>` | Travel by stargate (e.g. `/playerbots route Zara Vex Dodixie`) |
+| `/playerbots undock <bot>` | Undock |
+| `/playerbots warp <bot> <entityID>` | Warp to something nearby |
+| `/playerbots dock <bot> <stationID>` | Dock at a station |
+| `/playerbots task cancel\|retry <taskID>` | Cancel a queued task or retry a failed one |
+
+**Corporations**
+
+| Command | What it does |
+| --- | --- |
+| `/bots corp recall [corpID] [station\|structure <id>]` | Everyone home and hold (e.g. `/bots corp recall`) |
+| `/bots corp work [corpID] [auto\|mine\|pi\|director] [trips <n>]` | Lift the hold and start work (e.g. `/bots corp work mine trips 3`) |
+| `/bots corp status [corpID]` | Who is home, held, travelling or working |
+| `/bots corp hq [corpID] [list \| set <id> \| clear]` | Show or change headquarters (CEO/staff) |
+| `/bots corp deposit [corpID] [status\|on\|off\|auto\|deliveries\|hangar <1-7>]` | Where mined and PI goods go (CEO/staff) (e.g. `/bots corp deposit hangar 2`) |
+| `/bots corp inviteall [status\|cancel]` | Recruit eligible bots into the target corporation (e.g. `/bots corp inviteall`) |
+| `/bots corp help` | Corporation help in game |
+
+**Fleets and fittings**
+
+| Command | What it does |
+| --- | --- |
+| `/playerbots invite <bot>` | Invite a bot to your corporation |
+| `/playerbots join <bot>` | Ask a bot's corporation to invite you |
+| `/playerbots fleet add <bot>` | Add a bot to your fleet |
+| `/playerbots fleet join <bot>` | Ask a bot to invite you to its fleet |
+| `/follow [me\|<name>\|stop]` | Fleet chat: follow you or someone else (e.g. `/follow`) |
+| `/escort [me\|<name>\|stop]` | Fleet chat: security bots escort (e.g. `/escort`) |
+| `/attack [all\|<bot>]` | Fleet chat: attack your latest locked target (e.g. `/attack`) |
+| `/attack stop [all\|<bot>]` | Fleet chat: call off the attack (e.g. `/attack stop`) |
+| `/playerbots fit <bot> <fittingID\|link> [maxISK]` | Fit a bot from a saved fitting |
+| `/fitbot <fittingID\|link> [maxISK]` | The same, in a private chat with the bot |
+| `/playerbots fund <bot> <ISK>` | Give a bot some of your ISK (max 1B per transfer) |
+
+**Industry, PI and trade**
+
+| Command | What it does |
+| --- | --- |
+| `/playerbots industry cycle start <bot> <blueprintTypeID> <runs> <maxISK> [station <id>] [floor <ISK>] [corp <hangar> <wallet>]` | Run a manufacturing cycle |
+| `/playerbots industry cycle status\|stop\|resume <bot>` | Manage the cycle |
+| `/playerbots industry list\|blueprints\|jobs <bot>` | Blueprints and jobs |
+| `/playerbots industry auto set <bot> <blueprintItemID> <runs> <maxISK>` | Automatic in-place manufacturing |
+| `/playerbots industry auto status\|off <bot>` | Check or stop it |
+| `/playerbots task pi <bot>` | Queue PI extractor upkeep |
+| `/playerbots pi export set <bot> <planetID> <maxUnits> <maxTaxISK>` | Recurring PI exports |
+| `/playerbots pi export status\|off <bot> <planetID>` | Check or stop exports |
+| `/playerbots trade quote <bot> <typeID>` | Best local prices (e.g. `/playerbots trade quote Zara Vex 34`) |
+| `/playerbots trade buy <bot> <typeID> <qty> <maxUnitPrice>` | Buy now |
+| `/playerbots trade sell <bot> <itemID> [qty] <minUnitPrice>` | Sell now |
+| `/playerbots trade autosell set <bot> <typeID> <minUnitPrice> <maxUnits>` | Keep selling |
+| `/playerbots trade autobuy set <bot> <typeID> <maxUnitPrice> <targetStock> <maxSpendPerCycle>` | Keep restocking |
+| `/playerbots trade autosell\|autobuy status\|off <bot>` | Check or stop a trade rule |
+| `/playerbots courier post <issuer> <carrier> <from> <to> <itemID> <qty> <reward> <collateral>` | Courier contract between two bots |
+
+**Combat and territory**
+
+| Command | What it does |
+| --- | --- |
+| `/playerbots combat <bot> [security\|war\|piracy\|nullsec-conflict\|gate-camp]` | Combat patrol; gate-camp holds a gate in the HQ system (e.g. `/playerbots combat Zara Vex security`) |
+| `/playerbots sovereignty <bot>` | Sovereignty work |
+| `/playerbots build <bot> <structurePackageItemID> [nullSystemID]` | Deploy a structure in null-sec |
+| `/playerbots alliance found <CEO bot>` | Found an alliance |
+| `/playerbots defense status\|events\|set <json>\|off\|cancel <id>` | Optional local defense (staff) (e.g. `/playerbots defense status`) |
 
 ### Inspect the roster and work
 
@@ -477,7 +657,7 @@ remote chat delivery can be checked without guessing at host load.
 | `/playerbots mine <bot> [trips] [station <stationID>] [norefine] [nosell]` | Mine from asteroid belts, return when full or after the trip limit, unload and optionally refine/sell. `norefine` retains ore; `nosell` retains output for industry or later work. |
 | `/playerbots colony <bot>` | Set up a passive PI colony. Once setup completes, the pilot returns to normal work; scheduled PI collection/export can be done independently. |
 | `/playerbots haul <bot> <itemID|typeID> <fromStation> <toStation> [quantity]` | Haul personal hangar goods through the ship cargo hold, obeying capacity and route rules. |
-| `/playerbots upgrade <bot> [mining|logistics|security|piracy|sovereignty] [force]` | Buy and fit the next role-appropriate ship. The old hull stays in the hangar. `force` bypasses the normal minimum wallet threshold, but purchases still use the bot wallet. |
+| `/playerbots upgrade <bot> [mining|logistics|security|piracy|sovereignty|trade] [force]` | Buy and fit the next role-appropriate ship (`trade`: the hauler line up to the Jump Freighter; see [Trade haulers](#trade-haulers)). The old hull stays in the hangar. `force` bypasses the normal minimum wallet threshold, but purchases still use the bot wallet. |
 | `/playerbots route <bot> <systemID|exact system name>` | Queue a durable stargate route; the bot undocks as needed and retries travel stages. |
 | `/playerbots undock <bot>` | Undock a bot you control. |
 | `/playerbots warp <bot> <entityID>` | Order a local warp to an entity. |
@@ -611,8 +791,10 @@ without its usual threat responses, so use it in safe space. A pilot whose
 structure trip fails is released back to the director. `work` releases the
 corporation and starts mining around the HQ (or the nearest safe belts) and
 PI setup, or leaves the pilots to the director. `deposit` (CEO or staff)
-sends finished mining and PI output to the HQ, Corporation Deliveries or a
-hangar division instead of the market. Recall and work orders, from chat or
+sends finished mining and PI output to the HQ instead of the market, into the
+corporation hangar for the work (see [Corporation hangars](#corporation-hangars)),
+one chosen `hangar <1-7>` division, or `deliveries` (Corporation Deliveries,
+which EveJS does not show). Recall and work orders, from chat or
 the dashboard's Corporations page, are saved in the game store and re-issued
 about a minute after the server starts; a recall holds the corporation until
 it is sent to work, resumed or the order is cancelled. `status` lists held
@@ -656,7 +838,7 @@ planet for the production cycle.
 | Command | Use |
 | --- | --- |
 | `/playerbots trade quote <bot> <typeID>` | Show accessible best local buy/sell quotes. |
-| `/playerbots trade buy <bot> <typeID> <quantity> <maxUnitPrice>` | Buy immediately from local stock, capped at 100,000 units and 1B ISK per call. |
+| `/playerbots trade buy <bot> <typeID> <quantity> <maxUnitPrice>` | Buy immediately from local stock, capped at 100,000 units and 1B ISK per call (one Freighter or Jump Freighter hull may cost up to 20B). |
 | `/playerbots trade sell <bot> <itemID> [quantity] <minUnitPrice>` | Sell personal hangar inventory into accessible local buy orders. This does not create a standing order or sell ships. |
 | `/playerbots trade autosell set <bot> <typeID> <minUnitPrice> <maxUnits>` | Enable recurring sales of that type from the bot's current hangar. Unsold stock is listed for 90 days at the chosen floor; listing fees are waived. |
 | `/playerbots trade autosell status <bot>` / `off <bot>` | Inspect or disable the auto-sale policy. |
@@ -673,7 +855,7 @@ market orders, and PI launch state before scheduling another one.
 
 | Command | Use |
 | --- | --- |
-| `/playerbots combat <bot> [security|war|piracy|nullsec-conflict]` | Start a durable combat assignment in the selected mode. |
+| `/playerbots combat <bot> [security|war|piracy|nullsec-conflict|gate-camp]` | Start a durable combat assignment in the selected mode. `gate-camp` holds a stargate in the corporation's HQ system against lawful targets (see [Grievances, hostility and war](#grievances-hostility-and-war)). |
 | `/playerbots sovereignty <bot>` | Start sovereignty work for an eligible pilot and corporation. |
 | `/playerbots build <bot> <structurePackageItemID> [nullSystemID]` | Carry an owned Upwell structure package to a reachable claimable null-sec system and deploy through the normal structure authorities. |
 | `/playerbots alliance found <CEO bot>` | Start alliance founding for a corporation's eligible bot CEO. Skill, wallet reserve, and founding fee checks apply. |
@@ -730,6 +912,141 @@ structure is marked as the corporation's headquarters and gets a randomized
 name. It becomes the corporation's mining base and the depot for its
 deposits, and its caretaker keeps it fuelled and powered first, then every
 other structure the corporation owns.
+
+### Home base
+
+Like players in a corporation, bots live and work around their headquarters.
+Home is, in order:
+
+1. a structure chosen with `/bots corp hq set` or on the dashboard;
+2. the structure the corporation's bots built and marked as headquarters;
+3. an NPC station chosen the same way, only for a corporation with no
+   headquarters structure.
+
+A corporation with none of these has no home, and its pilots roam as before.
+An HQ nobody can dock at (docking service offline) is no home.
+
+- A docked pilot with no job, more jumps from home than the home range, flies
+  home before taking the next one. Traders follow the markets instead.
+- Miners base their trips at the headquarters when its system has asteroid
+  belts, is high-security (0.45 or better) and, for a structure, the structure
+  has a quantum core. Otherwise they use the nearest high-security station
+  with belts within range of home.
+- Combat pilots look for anomalies starting from home.
+
+| Setting | Default | Environment variable |
+| --- | --- | --- |
+| Stay within (jumps of HQ) | 5 | `EVEJS_PLAYER_BOTS_HOME_RANGE_JUMPS` (0 to 30; 0 turns home base off) |
+
+### Corporation hangars
+
+Corporation goods go into the corporation's office hangar at headquarters,
+where players can open them, not into Corporation Deliveries, which EveJS does
+not show. Each kind of work has its own division:
+
+| Division | Name (bot corporations) | Filled by |
+| --- | --- | --- |
+| 1 | Mining | Ore and minerals from mining deposits |
+| 2 | Planetary | PI goods from collection deposits |
+| 3 | Industry | Corporation industry cycles, unless a division is given |
+| 4 | Trade | Corporation trade orders, unless a division is given |
+| 5 | Combat | Reserved for combat work |
+
+Every bot, in a bot-run or a player-run corporation, is given the roles to
+view and take from divisions 1-5 and from deliveries, and nothing more (no
+director, wallet or other division roles); people's roles are never changed.
+A bot-run corporation's CEO rents the office at headquarters the first time
+it is docked there with goods to deposit, paid from the corporation wallet,
+and the divisions are named as above (names already chosen are kept). A
+player corporation rents its own office; until there is one, deposits fall
+back to Corporation Deliveries. `/bots corp deposit hangar <n>` sends
+everything to one division instead, and `/bots corp deposit deliveries` back
+to Deliveries.
+
+### Bot alliances
+
+Bot corporations form alliances through the game's own alliance authority:
+the founding corporation's CEO creates the alliance (the add-on trains it in
+Empire Control and hands over the 1B ISK fee as an operator grant), the other
+CEOs apply, the executor accepts, and membership takes effect after 24 hours.
+**Alliance mode** (Settings → Headquarters, `EVEJS_PLAYER_BOTS_ALLIANCE_MODE`):
+
+| Mode | What happens |
+| --- | --- |
+| 0 | Only the alliances you set up on the dashboard |
+| 1 (default) | Karma: corporations hostile to, or at war with, the same corporation, and with no grudge between them, ally (up to six); later allies join the existing alliance |
+| 2 | Population: each empire's bot corporations band together at once, four per alliance |
+
+Unless the mode is 0, the first director pass after installing founds one
+alliance of two to four bot corporations (same empire first), whose members
+join at once instead of after 24 hours, so the world starts with an alliance.
+Automatic alliances take famous science-fiction names. The dashboard's
+**Alliances** page lists every plan and its progress, and sets up your own:
+name, ticker, description, founding corporation, allies and a logo (any
+picture, saved as a 128 px PNG and given to the alliance in game).
+
+### Grievances, hostility and war
+
+Bot corporations answer violence the way player corporations do. Every attack
+on a bot by another corporation's pilot, bot or person, is an incident (at
+most one per attacker and victim every two minutes; NPCs, corpmates and
+alliance mates never count). Two incidents in 24 hours mark the aggressor's
+corporation hostile for seven days; three bring a war declaration through the
+normal war authority, bill and 24-hour timer, when the corporation has a
+structure to serve as war headquarters (one attempt every 30 minutes across
+the server). Piracy pilots hunting cargo-carrying ships, bots included, start
+most of these feuds.
+
+While a corporation is at war or has hostiles, up to three of its security
+pilots camp the stargates of its headquarters system, 20 minutes at a time.
+They engage war targets and criminal or suspect pilots anywhere, and hostile
+corporations only in low and null security space, where it is no crime.
+
+The dashboard's **Reputation** page lists every grievance with its attacks
+today and in total, whether the aggressor is hostile or at war, and the bots'
+security status. Mark hostile, Declare war and Forgive change a pairing by
+hand; Forgive stops further hostility and war from those incidents.
+
+**Risk tolerance** (Settings → Headquarters, `EVEJS_PLAYER_BOTS_RISK_TOLERANCE`,
+default 2) sets how far into dangerous space pilots work around their
+headquarters: 0 high-sec only, 1 low-sec, 2 null-sec.
+
+### Trade haulers
+
+Trade pilots fly haulers, not mining ships. Each climbs its own race's line,
+one step at a time, when it has the ISK:
+
+| Step | Caldari | Minmatar | Amarr | Gallente | Wallet needed |
+| --- | --- | --- | --- | --- | --- |
+| T1 industrial (Expanded Cargohold IIs) | Tayra | Mammoth | Bestower | Iteron Mark V | 10M |
+| Deep Space Transport | Bustard | Mastodon | Impel | Occator | 250M |
+| Freighter | Charon | Fenrir | Providence | Obelisk | 2.5B |
+| Jump Freighter | Rhea | Nomad | Ark | Anshar | 12B to 14B |
+
+Traders are trained for their whole line and topped up once to 20B ISK
+(`EVEJS_PLAYER_BOTS_TRADER_CAPITAL`; 0 turns the top-up off). The top-up
+counts as outside capital, not profit, so no share of it goes to the
+corporation. Jump Freighters use gates like everyone else.
+
+A trader with a hauler and nothing else to do runs goods to its trade hub
+(at most once every 30 minutes). It picks the modules, drones and charges bot
+pilots fit to their ships that the hub has less than half of ten fits' worth
+of, buys them at the Jita seed market with up to a quarter of its wallet (2B
+ISK at most), hauls them to the hub and lists them at the Jita price plus 15%.
+Pilots upgrading at that hub then buy there instead of flying to Jita. Items
+already sold elsewhere in the region are skipped, since Jita is only the
+fallback market. Hubs also keep minerals (for builders) and fuel blocks (for
+structure caretakers) in stock, and a trader buys at another empire hub when
+that hub undercuts Jita, so goods move between hubs too. Pilots buying ship
+upgrades use their own hub whenever it stocks the whole fit.
+
+| Setting | Default | Environment variable |
+| --- | --- | --- |
+| Bot fleets on/off | on | `EVEJS_PLAYER_BOTS_BOT_FLEETS=0` turns them off |
+| Bot fleets at once | 20 | `EVEJS_PLAYER_BOTS_MAX_BOT_FLEETS` (0 to 1,000) |
+| Pilots per bot fleet | 5 | `EVEJS_PLAYER_BOTS_BOT_FLEET_SIZE` (2 to 10) |
+
+No new bot fleets form while autonomous work is off.
 
 ### Markets and Jita
 
@@ -899,6 +1216,8 @@ war headquarters) may declare a normal war on another bot-run corporation
 whose pilots work in the same systems, at most one attempt an hour and two
 such wars at a time; the usual war bill and 24-hour start apply. Set
 `EVEJS_PLAYER_BOTS_BOT_VERSUS_BOT=0` and restart `server` to turn both off.
+Repeated attacks also lead to hostility and war on their own, for bots and
+people alike; see [Grievances, hostility and war](#grievances-hostility-and-war).
 
 ### Patrol rotation
 
@@ -1144,7 +1463,8 @@ second bot cannot spend the fee concurrently. After the alliance is confirmed,
 sovereignty specialists may pursue eligible neutral Hub captures or active
 campaign command nodes through the normal Entosis, fuel, timer, and safety
 authorities. Other corporations join only through the standard application and
-approval flow.
+approval flow. Alliances also form without a sovereignty founder; see
+[Bot alliances](#bot-alliances).
 
 ### Agent missions
 

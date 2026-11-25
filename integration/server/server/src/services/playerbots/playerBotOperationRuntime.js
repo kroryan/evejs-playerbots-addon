@@ -737,6 +737,8 @@ async function travelToStation(operation, bot, stationID, store = OPERATION_STOR
   }
   const space = getSpace();
   if (dockedStationID) {
+    // A bot fleet commander (a hauler and its escort, say) waits for its pilots.
+    if (fleetCommanderShouldWait(bot.characterID, "undock")) return { delayMs: TRAVEL_DELAY_MS };
     const result = space.undock(bot, { allowOverCapacityDeparture: true });
     if (!result.success) return result.capacityQueued
       ? { delayMs: TRAVEL_DELAY_MS, capacityQueued: true, capacityReason: result.message }
@@ -1005,6 +1007,8 @@ async function advanceMining(operation, bot) {
     return { delayMs: STEP_DELAY_MS };
   }
   if (operation.stage === "undock") {
+    // A bot leading its own fleet waits for its pilots, as a person would.
+    if (fleetCommanderShouldWait(bot.characterID, "undock")) return { delayMs: STEP_DELAY_MS };
     if (Number((getCharacterRecord(bot.characterID) || {}).shipTypeID) === 670 || !getMiningModules(bot).length) {
       return block(operation, "blocked", "No mining ship is available (capsule or no fitted miner); the director must assign another ship.");
     }
@@ -1176,6 +1180,9 @@ async function advanceMining(operation, bot) {
     if (!state.inSpace || state.busy) return { delayMs: TRAVEL_DELAY_MS };
     const distance = state.distanceTo(operation.beltID);
     if (distance !== null && distance > DOCK_WARP_RANGE_METERS) {
+      // A bot leading its own fleet waits for its pilots, as a person would.
+      if (fleetCommanderShouldWait(bot.characterID, "warp")) return { delayMs: STEP_DELAY_MS };
+
       const result = space.warp(bot, operation.beltID);
       if (!result.success) return block(operation, "blocked", result.message);
       return { delayMs: TRAVEL_DELAY_MS };
@@ -1657,7 +1664,47 @@ const SHIP_LADDER = Object.freeze({
     // still verifies the live hold before the package is loaded.
     { name: "Tayra structure hauler", hullTypeID: 649, moduleTypeIDs: [1319, 1319, 1319, 1319], minBalance: 25_000_000 },
   ],
+  // Traders climb their own race's hauler line to the end of the tree: the
+  // biggest T1 industrial, a Deep Space Transport, a Freighter, then a Jump
+  // Freighter. nextShipUpgrade keeps each trader on its own race's rungs.
+  // Freighters and Jump Freighters fly with an escort fleet
+  // (playerBotFleetCommandRuntime.js).
+  trade: [
+    { name: "Tayra trade hauler", raceID: 1, tier: 1, hullTypeID: 649, moduleTypeIDs: [1319, 1319, 1319, 1319], minBalance: 10_000_000 },
+    { name: "Mammoth trade hauler", raceID: 2, tier: 1, hullTypeID: 652, moduleTypeIDs: [1319, 1319, 1319, 1319, 1319], minBalance: 10_000_000 },
+    { name: "Bestower trade hauler", raceID: 4, tier: 1, hullTypeID: 1944, moduleTypeIDs: [1319, 1319, 1319, 1319, 1319, 1319], minBalance: 10_000_000 },
+    { name: "Iteron Mark V trade hauler", raceID: 8, tier: 1, hullTypeID: 657, moduleTypeIDs: [1319, 1319, 1319, 1319, 1319], minBalance: 10_000_000 },
+    { name: "Bustard deep space transport", raceID: 1, tier: 2, hullTypeID: 12731, moduleTypeIDs: [], minBalance: 250_000_000 },
+    { name: "Mastodon deep space transport", raceID: 2, tier: 2, hullTypeID: 12747, moduleTypeIDs: [], minBalance: 250_000_000 },
+    { name: "Impel deep space transport", raceID: 4, tier: 2, hullTypeID: 12753, moduleTypeIDs: [], minBalance: 250_000_000 },
+    { name: "Occator deep space transport", raceID: 8, tier: 2, hullTypeID: 12745, moduleTypeIDs: [], minBalance: 250_000_000 },
+    { name: "Charon freighter", raceID: 1, tier: 3, hullTypeID: 20185, moduleTypeIDs: [], minBalance: 2_500_000_000 },
+    { name: "Fenrir freighter", raceID: 2, tier: 3, hullTypeID: 20189, moduleTypeIDs: [], minBalance: 2_500_000_000 },
+    { name: "Providence freighter", raceID: 4, tier: 3, hullTypeID: 20183, moduleTypeIDs: [], minBalance: 2_500_000_000 },
+    { name: "Obelisk freighter", raceID: 8, tier: 3, hullTypeID: 20187, moduleTypeIDs: [], minBalance: 2_500_000_000 },
+    { name: "Rhea jump freighter", raceID: 1, tier: 4, hullTypeID: 28844, moduleTypeIDs: [], minBalance: 12_000_000_000 },
+    { name: "Nomad jump freighter", raceID: 2, tier: 4, hullTypeID: 28846, moduleTypeIDs: [], minBalance: 13_000_000_000 },
+    { name: "Ark jump freighter", raceID: 4, tier: 4, hullTypeID: 28850, moduleTypeIDs: [], minBalance: 14_000_000_000 },
+    { name: "Anshar jump freighter", raceID: 8, tier: 4, hullTypeID: 28848, moduleTypeIDs: [], minBalance: 12_000_000_000 },
+  ],
 });
+
+const TRADE_RACES = new Set([1, 2, 4, 8]);
+
+// A trader's race picks its hauler line; anyone else, Caldari.
+function botRaceID(bot) {
+  const character = getCharacterRecord(bot && bot.characterID) || {};
+  const raceID = normalizePositiveInteger(bot && bot.raceID) || normalizePositiveInteger(character.raceID);
+  return TRADE_RACES.has(raceID) ? raceID : 1;
+}
+
+// The rungs a pilot climbs for a role: the trade line is one race's haulers.
+function roleLadder(role, bot) {
+  const rungs = (SHIP_LADDER[role] || []).map(resolveShipLadderRung).filter(Boolean);
+  if (role !== "trade") return rungs;
+  const raceID = botRaceID(bot);
+  return rungs.filter((rung) => Number(rung.raceID) === raceID).sort((left, right) => left.tier - right.tier);
+}
 
 function resolveLadderTypeID(value) {
   const numeric = Number(value);
@@ -1726,6 +1773,43 @@ function getShipRungSkillRequirements(role, hullTypeID) {
   return [...requirements.entries()];
 }
 
+// Every skill a trader needs to fly and fit its own race's whole hauler line,
+// with each skill's own prerequisites, so the character sheet is consistent.
+function getTradeLadderSkillRequirements(bot) {
+  const requirements = new Map();
+  const queue = [];
+  const need = (skillTypeID, level) => {
+    if ((requirements.get(skillTypeID) || 0) >= level) return;
+    requirements.set(skillTypeID, level);
+    queue.push(skillTypeID);
+  };
+  for (const rung of roleLadder("trade", bot)) {
+    for (const typeID of [rung.hullTypeID, ...(rung.moduleTypeIDs || [])]) {
+      for (const [skillTypeID, level] of requiredSkillsForType(typeID)) need(skillTypeID, level);
+    }
+  }
+  for (let guard = 0; queue.length && guard < 500; guard += 1) {
+    for (const [skillTypeID, level] of requiredSkillsForType(queue.shift())) need(skillTypeID, level);
+  }
+  return [...requirements.entries()];
+}
+
+// The modules, drones and cargo bot pilots buy for the ladder fits, with how
+// many of each one fit uses. Ships are left out: hulls are not imported.
+function listShipLadderItemDemand() {
+  const demand = new Map();
+  for (const rungs of Object.values(SHIP_LADDER)) {
+    for (const rung of rungs.map(resolveShipLadderRung).filter(Boolean)) {
+      const counts = new Map();
+      for (const typeID of [...(rung.moduleTypeIDs || []), ...(rung.droneTypeIDs || []), ...(rung.cargoTypeIDs || [])]) {
+        counts.set(Number(typeID), (counts.get(Number(typeID)) || 0) + 1);
+      }
+      for (const [typeID, count] of counts) demand.set(typeID, Math.max(demand.get(typeID) || 0, count));
+    }
+  }
+  return [...demand].map(([typeID, perFit]) => ({ typeID, perFit }));
+}
+
 function canUseRung(bot, rung) {
   return [rung.hullTypeID, ...(rung.moduleTypeIDs || []), ...(rung.droneTypeIDs || []), ...(rung.fighterTypeIDs || [])]
     .every((typeID) => hasSkills(bot, requiredSkillsForType(typeID)));
@@ -1761,9 +1845,15 @@ function selectBootstrapRung(role, currentIndex, balance, ladder = SHIP_LADDER[r
 function nextShipUpgrade(bot, role = "mining", options = {}) {
   const character = getCharacterRecord(bot.characterID) || {};
   const currentHull = Number(character.shipTypeID) || 0;
-  const ladder = (SHIP_LADDER[role] || []).map(resolveShipLadderRung).filter(Boolean);
-  const currentIndex = ladder.findIndex((rung) => rung.hullTypeID === currentHull);
-  const currentRung = currentIndex >= 0 ? ladder[currentIndex] : null;
+  const ladder = roleLadder(role, bot);
+  let currentIndex = ladder.findIndex((rung) => rung.hullTypeID === currentHull);
+  // A trader in another race's hauler climbs from that hauler's tier.
+  if (role === "trade" && currentIndex < 0) {
+    const flown = (SHIP_LADDER.trade || []).map(resolveShipLadderRung).filter(Boolean)
+      .find((rung) => rung.hullTypeID === currentHull);
+    if (flown) currentIndex = ladder.findIndex((rung) => rung.tier === flown.tier);
+  }
+  const currentRung = currentIndex >= 0 && ladder[currentIndex].hullTypeID === currentHull ? ladder[currentIndex] : null;
   if (currentRung && ((currentRung.moduleTypeIDs || []).length || (currentRung.droneTypeIDs || []).length || (currentRung.cargoTypeIDs || []).length)) {
     const itemStore = require("../inventory/itemStore");
     const shipID = Number(character.shipID) || 0;
@@ -1907,6 +1997,9 @@ function findUpgradeMarketStation(bot, rungOrOperation) {
   const economy = require("./playerBotEconomyRuntime");
   const candidates = economy.findSellStationsForPackage(needs);
   if (!candidates.length) return hubStationFor(bot);
+  // The pilot's own hub first, whenever it stocks the whole package.
+  const ownHub = Number(hubStationFor(bot)) || 0;
+  if (candidates.some((candidate) => Number(candidate.stationID) === ownHub && candidate.complete)) return ownHub;
   const outsideJita = candidates.filter((candidate) => !candidate.isJita);
   const preferred = outsideJita.length ? outsideJita : candidates.filter((candidate) => candidate.isJita);
   const stationCandidatesBySystem = new Map();
@@ -2924,6 +3017,9 @@ function startShipUpgrade(botQuery, role = "mining", options = {}) {
     pending: null,
     newShipID: null,
     autonomous: options.autonomous === true,
+    ...(normalizePositiveInteger(options.fleetDutyCommanderID)
+      ? { fleetDutyCommanderID: normalizePositiveInteger(options.fleetDutyCommanderID) }
+      : {}),
   });
   if (options.warMobilizationSupportID) {
     const reservation = require("./playerBotWarMobilizationRuntime")
@@ -2937,7 +3033,7 @@ function startShipUpgrade(botQuery, role = "mining", options = {}) {
   return { success: true, operation, message: `${bot.characterName} will buy and fit a ${rung.name} at ${operation.marketStationID} (maximum spend ${operation.maxSpend.toFixed(2)} ISK).` };
 }
 
-function startSavedFitting(botQuery, fittingID, requesterSession, requestedMaxSpend = null) {
+function startSavedFitting(botQuery, fittingID, requesterSession, requestedMaxSpend = null, options = {}) {
   const bot = getPlayerBots().resolveBot(botQuery);
   const refusal = assertCanStart(bot);
   if (refusal) return { success: false, message: refusal };
@@ -3003,6 +3099,9 @@ function startSavedFitting(botQuery, fittingID, requesterSession, requestedMaxSp
     pending: null,
     newShipID: null,
     autonomous: false,
+    ...(normalizePositiveInteger(options.fleetDutyCommanderID)
+      ? { fleetDutyCommanderID: normalizePositiveInteger(options.fleetDutyCommanderID) }
+      : {}),
   });
   record(operation, `Preparing saved fitting ${saved.name} (${numericFittingID}) at ${operation.marketStationID}; spend limit ${operation.maxSpend.toFixed(2)} ISK with ${protectedCapital.toFixed(2)} ISK starting capital protected.`);
   saveOperation(operation);
@@ -3247,12 +3346,15 @@ async function advanceRegionalSaleRoute(operation, bot) {
   return { delayMs: STEP_DELAY_MS };
 }
 
-function startRelocation(botQuery, destinationStationID) {
+function startRelocation(botQuery, destinationStationID, options = {}) {
   const bot = getPlayerBots().resolveBot(botQuery);
   const refusal = assertCanStart(bot);
   if (refusal) return { success: false, message: refusal };
   const stationID = normalizePositiveInteger(destinationStationID);
-  const station = worldData.getStationByID(stationID);
+  const home = options.home === true;
+  // Going home may end at the corporation's own structure.
+  const station = worldData.getStationByID(stationID) ||
+    (home && typeof worldData.getStructureByID === "function" ? worldData.getStructureByID(stationID) : null);
   if (!station) return { success: false, message: "Relocation destination " + (stationID || "unknown") + " is not a supported station." };
   const character = getCharacterRecord(bot.characterID) || {};
   const originSystemID = normalizePositiveInteger(character.solarSystemID);
@@ -3266,11 +3368,17 @@ function startRelocation(botQuery, destinationStationID) {
     homeStationID: stationID,
     originSystemID,
     destinationSystemID: Number(station.solarSystemID) || 0,
-    reason: "per-system autonomous work distribution",
+    reason: home ? "return to headquarters" : "per-system autonomous work distribution",
+    autonomous: true,
+    ...(home ? { returningHome: true } : {}),
   });
-  record(operation, "Leaving the crowded system for station " + stationID + " in system " + operation.destinationSystemID + "; regular work will resume there.");
+  record(operation, home
+    ? "Flying home to corporation headquarters " + stationID + " in system " + operation.destinationSystemID + "; the next job will be found around home."
+    : "Leaving the crowded system for station " + stationID + " in system " + operation.destinationSystemID + "; regular work will resume there.");
   saveOperation(operation);
-  return { success: true, operation, message: bot.characterName + " will relocate to station " + stationID + " to continue work in a less crowded system." };
+  return { success: true, operation, message: home
+    ? bot.characterName + " is flying home to headquarters " + stationID + "."
+    : bot.characterName + " will relocate to station " + stationID + " to continue work in a less crowded system." };
 }
 
 function startSell(botQuery, stationID = null, originStationID = null, options = {}) {
@@ -4138,9 +4246,11 @@ async function advancePlanetaryCollection(operation, bot) {
 async function advanceRelocation(operation, bot) {
   const step = await travelToStation(operation, bot, Number(operation.destinationStationID));
   if (step) return step;
-  return finish(operation, "Relocation complete: arrived at station " + operation.destinationStationID +
-    " in system " + stationSystemID(operation.destinationStationID) +
-    " to spread autonomous work across systems.");
+  return finish(operation, operation.returningHome
+    ? "Home: docked at corporation headquarters " + operation.destinationStationID + "."
+    : "Relocation complete: arrived at station " + operation.destinationStationID +
+      " in system " + stationSystemID(operation.destinationStationID) +
+      " to spread autonomous work across systems.");
 }
 
 async function advanceFleetFollow(operation, bot, dependencies = {}) {
@@ -4295,9 +4405,24 @@ const HANDLERS = {
     block,
     finish,
   }),
+  "fleet-duty": (operation, bot) => require("./playerBotFleetCommandRuntime").advanceFleetDuty(operation, bot, {
+    travelToSystem: (current, actor, systemID) => travelToSystem(current, actor, systemID),
+    travelToStation: (current, actor, stationID) => travelToStation(current, actor, stationID),
+    clearRouteTask,
+    record,
+    save: saveOperation,
+    finish,
+  }),
   "pi-collect": advancePlanetaryCollection,
   colony: (operation, bot) => require("./playerBotColonyRuntime").advanceColony(operation, bot, COLONY_KIT),
   fulfill: advanceFulfill,
+  "trade-run": (operation, bot) => require("./playerBotTradeRunRuntime").advance(operation, bot, {
+    travelToStation: (current, actor, stationID) => travelToStation(current, actor, stationID),
+    record,
+    save: saveOperation,
+    block,
+    finish,
+  }),
   sell: advanceSell,
   haul: advanceHaul,
   mine: advanceMining,
@@ -4552,6 +4677,39 @@ function startFleetFollow(botQuery, targetCharacterID, followMode, requesterChar
   require("./playerBotAutonomyRuntime").wakeIndustryCycleStep(bot.characterID).catch((error) =>
     require("../../utils/logger").warn(`[PlayerBots] Could not wake fleet-follow order char=${bot.characterID}: ${error.message}`));
   return { success: true, operation, message: `${bot.characterName} accepted the ${mode} order and will follow human fleet member ${targetID}.` };
+}
+
+// Fleet duty (see playerBotFleetCommandRuntime.js): the bot works for a human
+// fleet commander until the FC stands the fleet down. Only the fleet command
+// runtime starts it, once the pilot's other work is finished or stopped.
+function startFleetDuty(botQuery, commanderCharacterID, options = {}) {
+  const bot = getPlayerBots().resolveBot(botQuery);
+  if (!bot) return { success: false, message: `No unique playerbot found for ${botQuery}.` };
+  if (bot.status === "paused" || bot.autonomyPaused === true) {
+    return { success: false, message: `${bot.characterName} is paused and cannot join fleet duty.` };
+  }
+  const commanderID = normalizePositiveInteger(commanderCharacterID);
+  if (!commanderID) return { success: false, message: "Fleet duty needs a fleet commander." };
+  const refusal = assertCanStart(bot);
+  if (refusal) return { success: false, message: refusal };
+  const operation = baseOperation("fleet-duty", bot, {
+    stage: "muster",
+    commanderID,
+    fleetID: 0,
+    fleetType: String(options.fleetType || ""),
+    fitWaivedForType: String(options.fitWaivedForType || ""),
+    fitCheckedAtMs: 0,
+    routeDestinationSystemID: 0,
+    userDirected: true,
+    autonomous: false,
+    stopRequested: false,
+    stopReason: "",
+  });
+  record(operation, `${bot.characterName} reported for ${operation.fleetType || "fleet"} duty with fleet commander ${commanderID}.`);
+  saveOperation(operation);
+  require("./playerBotAutonomyRuntime").wakeIndustryCycleStep(bot.characterID).catch((error) =>
+    require("../../utils/logger").warn(`[PlayerBots] Could not wake fleet duty char=${bot.characterID}: ${error.message}`));
+  return { success: true, operation, message: `${bot.characterName} is on fleet duty.` };
 }
 
 function startFleetAttack(botQuery, target = {}) {
@@ -4812,6 +4970,36 @@ function startHaul(botQuery, itemOrTypeID, fromStationID, toStationID, quantity 
   return { success: true, operation, message: `${bot.characterName} will haul ${isItem ? `item ${reference}` : `type ${reference}`}${operation.quantity ? ` (${operation.quantity} units)` : ""} from ${from} to ${to} (operation ${operation.operationID}).` };
 }
 
+// A trader's run from the seed market to its hub (playerBotTradeRunRuntime.js).
+function startTradeRun(botQuery, plan = null) {
+  const bot = getPlayerBots().resolveBot(botQuery);
+  const refusal = assertCanStart(bot);
+  if (refusal) return { success: false, message: refusal };
+  const run = plan || require("./playerBotTradeRunRuntime").planTradeRun(bot);
+  if (!run || !Array.isArray(run.items) || !run.items.length) {
+    return { success: false, message: `${bot.characterName}'s hub needs nothing a trade run could bring.` };
+  }
+  const operation = baseOperation("trade-run", bot, {
+    stage: "to-source",
+    sourceStationID: normalizePositiveInteger(run.sourceStationID),
+    hubStationID: normalizePositiveInteger(run.hubStationID),
+    maxSpend: Math.round(Number(run.maxSpend) * 100) / 100,
+    spent: 0,
+    volume: 0,
+    items: run.items.map((item) => ({
+      typeID: normalizePositiveInteger(item.typeID),
+      quantity: normalizePositiveInteger(item.quantity),
+      referencePrice: Number(item.referencePrice) || 0,
+      bought: 0,
+      done: false,
+    })),
+    autonomous: true,
+  });
+  record(operation, `Trade run: buying ${operation.items.length} kind(s) of goods at ${operation.sourceStationID} for the hub ${operation.hubStationID}; spend limit ${operation.maxSpend.toFixed(2)} ISK.`);
+  saveOperation(operation);
+  return { success: true, operation, message: `${bot.characterName} will run goods from ${operation.sourceStationID} to its hub ${operation.hubStationID} (operation ${operation.operationID}).` };
+}
+
 function startAllianceCourier(botQuery, contractID, options = {}) {
   const numericContractID = normalizePositiveInteger(contractID);
   if (!numericContractID) return { success: false, message: "Contract ID must be a positive integer." };
@@ -4892,6 +5080,11 @@ function startMining(botQuery, maxTrips = 1, options = {}) {
     return { success: false, message: `The system for ${homeStationID} has no asteroid belts.` };
   }
   const marketStationWasConfigured = Boolean(normalizePositiveInteger(options.marketStationID));
+  // Autonomous miners work from their corporation's headquarters, or the
+  // nearest belt station to it (playerBotHomeBaseRuntime.js).
+  if (!homeStationID && options.autonomous === true) {
+    try { homeStationID = normalizePositiveInteger(require("./playerBotHomeBaseRuntime").homeMiningStation(bot)); } catch (_) { homeStationID = 0; }
+  }
   if (!homeStationID) {
     const currentStationID = normalizePositiveInteger(character.stationID);
     const economy = require("./playerBotEconomyRuntime");
@@ -4985,7 +5178,7 @@ function startMining(botQuery, maxTrips = 1, options = {}) {
 
 function canStartCombatModeForPilot(bot, mode, hasCombatFit) {
   const normalizedMode = String(mode || "").trim().toLowerCase();
-  const shipRole = ["war", "nullsec-conflict"].includes(normalizedMode) ? "security" : normalizedMode;
+  const shipRole = ["war", "nullsec-conflict", "gate-camp"].includes(normalizedMode) ? "security" : normalizedMode;
   return Boolean(bot && (bot.specialty === shipRole ||
     normalizedMode === "war" && hasCombatFit === true));
 }
@@ -4995,14 +5188,14 @@ function startCombat(botQuery, mode = "security", options = {}) {
   const refusal = assertCanStart(bot);
   if (refusal) return { success: false, message: refusal };
   const normalizedMode = String(mode || "").trim().toLowerCase();
-  if (!["security", "piracy", "war", "nullsec-conflict"].includes(normalizedMode)) {
-    return { success: false, message: "Combat mode must be security, war, piracy, or nullsec-conflict." };
+  if (!["security", "piracy", "war", "nullsec-conflict", "gate-camp"].includes(normalizedMode)) {
+    return { success: false, message: "Combat mode must be security, war, piracy, nullsec-conflict or gate-camp." };
   }
   if (normalizedMode === "war" &&
       !require("../corporation/warRuntimeState").hasActiveWarForCharacter(bot.characterID)) {
     return { success: false, message: "War patrol requires an active war; declarations still in the waiting period only allow preparation." };
   }
-  const shipRole = ["war", "nullsec-conflict"].includes(normalizedMode) ? "security" : normalizedMode;
+  const shipRole = ["war", "nullsec-conflict", "gate-camp"].includes(normalizedMode) ? "security" : normalizedMode;
   const hasCombatFit = hasRoleShipFit(bot, shipRole);
   // The war director deliberately mobilizes any cross-trained pilot whose
   // security fit can participate. Keep specialty-specific patrols restricted
@@ -5061,6 +5254,8 @@ function startCombat(botQuery, mode = "security", options = {}) {
   const defensiveTargetID = normalizePositiveInteger(options.defensiveTargetID);
   const anomalyTarget = !defensiveTargetID && !miningEscortTarget && normalizedMode === "security"
     ? combat.findNearestCombatAnomalyBase(bot, fitProfile, 20, {
+      // Ratters look for sites around home first.
+      originSystemID: homeCombatOrigin(bot),
       excludedSiteInstanceIDs: failedAnomalySites.map((entry) => Number(entry.siteInstanceID)).filter(Boolean),
       targetDifficulty: require("./playerBotCombatProgressRuntime")
         .getNextSiteDifficulty(bot.characterID, fitProfile && fitProfile.maxSiteDifficulty),
@@ -5080,6 +5275,7 @@ function startCombat(botQuery, mode = "security", options = {}) {
   } else if (miningEscortTarget) target = miningEscortTarget;
   else if (normalizedMode === "nullsec-conflict") target = conflictTarget;
   else if (normalizedMode === "piracy") target = combat.findNearestPirateBase(bot);
+  else if (normalizedMode === "gate-camp") target = require("./playerBotHomeBaseRuntime").gateCampBase(bot);
   else if (normalizedMode === "war") target = warTarget;
   else if (anomalyTarget.success) target = anomalyTarget;
   else {
@@ -5533,6 +5729,20 @@ function stopOperation(botQuery) {
       message: operation.kind === "alliance-courier"
         ? `Operation ${operation.operationID} for ${bot.characterName} is stopping safely; an accepted courier package will be delivered before the operation ends.`
         : `Operation ${operation.operationID} for ${bot.characterName} is withdrawing safely; combat drones will return and an active Entosis cycle will finish before warp.`,
+    };
+  }
+  if (operation.kind === "fleet-duty" && ACTIVE_STATUSES.has(operation.status)) {
+    operation.stopRequested = true;
+    operation.stopReason = operation.stopReason || "Stopped by an operator.";
+    record(operation, `${operation.stopReason} Recalling drones before leaving the fleet's work.`);
+    saveOperation(operation);
+    require("./playerBotAutonomyRuntime").wakeIndustryCycleStep(bot.characterID).catch((error) =>
+      require("../../utils/logger").warn(`[PlayerBots] Could not wake fleet duty stop char=${bot.characterID}: ${error.message}`));
+    return {
+      success: true,
+      operation,
+      graceful: true,
+      message: `${bot.characterName} is recalling drones and leaving fleet duty.`,
     };
   }
   if (operation.kind === "fleet-attack") {
@@ -6289,6 +6499,24 @@ function retireOperationForRemovedPilot(characterID, reason = "The pilot was rem
   return true;
 }
 
+// The headquarters system a pilot's combat-site search starts from, or 0.
+function homeCombatOrigin(bot) {
+  try {
+    return normalizePositiveInteger(require("./playerBotHomeBaseRuntime").searchOriginSystemID(bot));
+  } catch (_) {
+    return 0;
+  }
+}
+
+// Bot-led fleets (playerBotFleetCommandRuntime.js): a commander waits for its pilots.
+function fleetCommanderShouldWait(characterID, phase) {
+  try {
+    return require("./playerBotFleetCommandRuntime").commanderShouldWait(characterID, phase) === true;
+  } catch (_) {
+    return false;
+  }
+}
+
 module.exports = {
   retireOperationForRemovedPilot,
   _testing: {
@@ -6367,12 +6595,15 @@ module.exports = {
   requiredSkillsForType,
   getCombatShipSkillRequirements,
   getShipRungSkillRequirements,
+  getTradeLadderSkillRequirements,
+  listShipLadderItemDemand,
   resumeOperation,
   reconcileLegacyPIExportReviews,
   startShipUpgrade,
   startCapsuleRecovery,
   startSavedFitting,
   startHaul,
+  startTradeRun,
   startAllianceCourier,
   startAllianceFounding,
   startMining,
@@ -6385,6 +6616,8 @@ module.exports = {
   startStructureServiceProvision,
   startFleetFollow,
   commandFleetFollow,
+  startFleetDuty,
+  getMiningModules,
   startFleetAttack,
   requestFleetAttackStop,
   stopOperation,

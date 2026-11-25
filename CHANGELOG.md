@@ -3,6 +3,197 @@
 Newest first. The Docker add-on keeps the upstream version number (0.2.152);
 the Windows launcher package adds a fourth number for its own releases.
 
+## Unreleased: corporation hangars
+
+- Chat and dashboard orders accept `upgrade <bot> trade` (the hauler line) and
+  `combat <bot> gate-camp`; the guide has a full command reference table.
+
+- **Deposits go to corporation hangars.** Corporation Deliveries cannot be
+  opened in EveJS, so mining and PI deposits now go into the corporation's
+  office hangar at headquarters: ore and minerals to division 1 (Mining), PI
+  goods to division 2 (Planetary). Corporation industry cycles default to
+  division 3 (Industry) and corporation trade orders to 4 (Trade); 5 (Combat)
+  is reserved.
+- **Roles for bots in every corporation.** Each bot, in bot-run and player
+  corporations alike, gets the roles to view and take from divisions 1-5 and
+  deliveries; nothing else, and people's roles are untouched.
+- **Offices and division names.** A bot-run corporation's CEO rents the office
+  at headquarters when docked there with goods to deposit, and names
+  divisions 1-5. Player corporations rent their own; without an office goods
+  still fall back to Deliveries.
+- `/bots corp deposit deliveries` and `hangar <n>` still choose by hand; an
+  older saved default of Deliveries now moves to hangars.
+
+## Unreleased: bot alliances
+
+- **Corporations form alliances.** Alliance mode (Settings,
+  `EVEJS_PLAYER_BOTS_ALLIANCE_MODE`): 0 dashboard plans only, 1 karma (default:
+  corporations sharing an enemy and holding no grudge against each other ally,
+  up to six), 2 population (each empire's bot corporations band together at
+  once, four per alliance). Everything goes through the game's alliance
+  authority: the founder's CEO creates the alliance (trained in Empire Control
+  and handed the 1B fee as an operator grant), allies apply and are accepted,
+  effective after 24 hours.
+- Alliances take famous science-fiction names (Rebel Alliance, Interstellar
+  Alliance, Outer Planets Alliance, ...), including those founded by
+  sovereignty pilots.
+- **Alliances page** on the dashboard: every plan with its logo, founder,
+  allies and progress, and a form to set up your own: name (with
+  suggestions), ticker, description, founder, allies and a logo picture.
+- **A first alliance on the first run.** Unless the mode is 0, the first
+  director pass founds one alliance of two to four bot corporations (same
+  empire first) whose members join at once instead of after 24 hours.
+- Tested on the test server: on the first pass Earth Alliance was founded with
+  two member corporations; in population mode two more alliances were founded
+  within seconds of start-up.
+
+## Unreleased: grievances, gate camps and wider trade
+
+- **Grievances.** Every attack on a bot by another corporation's pilot (bot or
+  person) is recorded against the victim's corporation. Two attacks in a day
+  mark the aggressor hostile for a week; three bring a war declaration through
+  the normal war authority (it needs a structure as war headquarters and the
+  usual bill). NPCs, corpmates and alliance mates never count.
+- **Gate camps.** While its corporation is at war or has hostiles, up to three
+  security pilots camp the headquarters system's stargates for 20 minutes at a
+  time. They shoot only lawful targets: war targets and criminal or suspect
+  pilots anywhere, and hostile corporations in low and null security space.
+- **Risk tolerance** (Settings, `EVEJS_PLAYER_BOTS_RISK_TOLERANCE`, default 2):
+  0 keeps headquarters miners in high-sec, 1 lets them into low-sec, 2 into
+  null-sec, so corporations based in null mine at home.
+- **Reputation page** on the dashboard: grievances, hostility and wars per
+  corporation pair, with Mark hostile, Declare war and Forgive, plus the bots'
+  security status (outlaws and upstanding pilots).
+- **Trade runs reach further.** Hubs also stock minerals and fuel blocks, and a
+  trader buys from another empire hub when it undercuts Jita. Pilots buying
+  ship upgrades use their own hub whenever it stocks the whole fit.
+
+## Unreleased: trade haulers and escorts
+
+- **Traders fly haulers.** Trade pilots climb their own race's hauler line
+  instead of the mining ladder: the biggest T1 industrial (with Expanded
+  Cargohold IIs), a Deep Space Transport, a Freighter, then a Jump Freighter.
+  The skill profile (v17) trains them for the whole line, prerequisites
+  included, and every trader is topped up once to 20B ISK
+  (`EVEJS_PLAYER_BOTS_TRADER_CAPITAL`) so a Jump Freighter is in reach.
+- **Trade runs.** A trader in a hauler buys the modules, drones and charges
+  bot pilots fit to their ships at the Jita seed market, hauls them to its own
+  trade hub and lists them there at the Jita price plus 15%, for ten fits'
+  worth of each item. Items sold anywhere else in the region are left alone
+  (Jita stays the fallback). At most one run every 30 minutes; a quarter of
+  the trader's wallet, up to 2B ISK, per run.
+- **Escorts for capital haulers.** A trader in a Freighter or Jump Freighter
+  setting off on any haul (trade run, order delivery, sale, haul or courier
+  contract) forms an escort fleet of up to four combat corpmates: idle pilots
+  docked within three jumps first, then security pilots on their way to a
+  patrol. It waits for them before undocking (up to 5 minutes) and in each
+  system before the next gate (up to 90 seconds). Bot-led mining and combat
+  fleets now also wait at each gate (up to a minute).
+- The trade guard allows one Freighter or Jump Freighter hull of up to 20B ISK
+  per purchase; every other purchase keeps the 1B limits.
+
+## Unreleased: home base
+
+- **Bots live around their headquarters.** A corporation's home is its Upwell
+  headquarters structure: one chosen with `/bots corp hq set` or on the
+  dashboard, else the structure its bots built and marked. A corporation with
+  no structure can use a saved NPC station instead; with neither, its pilots
+  roam as before.
+- A docked pilot with no job, more jumps from home than the home range, flies
+  home before taking the next one ("Flying home to corporation
+  headquarters"). Traders still follow the markets.
+- Miners base their trips at the headquarters when its system has belts, is
+  high-security and (for a structure) the structure has a quantum core;
+  otherwise at the nearest high-security station with belts within range of
+  home. Combat pilots look for anomalies starting from home.
+- New setting **Stay within (jumps of HQ)**, default 5 (0 turns it off), and
+  `EVEJS_PLAYER_BOTS_HOME_RANGE_JUMPS`. Shown in a new Headquarters panel in
+  Settings.
+
+## Unreleased: bot-led fleets
+
+- **Bot corporations form their own fleets.** A bot mining from a station or
+  ratting in a system leads; corpmates mining from the same station, or idle
+  in that system with a fitting ship, join and fly fleet duty behind it. The
+  commander waits for its pilots before undocking or warping off; full miners
+  without a fleet hangar to fill stay with it and unload when the fleet docks.
+  Fleets break up when the commander's job ends, it goes offline, its pilots
+  leave, or after about three hours.
+- Shown read-only on the Fleets page. New settings: **Bot fleets** on/off,
+  **Bot fleets at once** (20) and **Pilots per bot fleet** (5), with matching
+  `EVEJS_PLAYER_BOTS_BOT_FLEETS`, `..._MAX_BOT_FLEETS` and `..._BOT_FLEET_SIZE`.
+- The engine no longer disbands a fleet that has no person in it when the bots
+  formed it on purpose.
+- Fix: fleet duty found a fleet's boss through a function the engine does not
+  export; it now reads the boss from the fleet itself.
+- Tested on the test server: two bots of one corporation formed a mining fleet
+  on their own; the member crossed three systems, warped to the commander,
+  mined, docked with it, repaired after a rat attack and unloaded at home.
+
+## Unreleased: fleet duty
+
+On the `dashboard-redesign` branch, after the redesign. Server and dashboard.
+
+- **Fleets page.** Lists every fleet with bots, its fleet commander (FC), the
+  FC's fleet hangar and what each bot is doing. The FC chooses **Mining**,
+  **Combat**, **Hauling** or **Escort** and, optionally, a saved fitting.
+- **Fleet duty** (new `fleet-duty` operation): bots fetch a fitting ship if
+  they need one, travel to the FC, dock and undock with the FC, follow the FC
+  in warp and work the grid: mine and unload into the FC's fleet hangar or a
+  jet can, kill every rat (drones, fighters, guns), haul fleet jet cans to the
+  FC, or escort. Badly damaged bots dock, repair and rejoin.
+- Bots on duty take no director work, are not queued for work capacity, stay
+  connected, and answer attackers instead of running home.
+- New add-on API routes `GET /v1/dashboard/fleets` and
+  `POST /v1/dashboard/fleet-command`, proxied as `/api/fleets` and
+  `/api/fleet-command`. A new guide topic, *Running a bot fleet*.
+- Tested on the test server with a headless FC in an Orca: undock, fleet warp,
+  laser mining, jet cans, fleet hangar deliveries, combat, withdrawal and
+  repair, cross-system travel, docking with the FC and standing down.
+
+## Unreleased: dashboard redesign
+
+On the `dashboard-redesign` branch of the ubermidas fork. A new front end for
+the dashboard, the first step of the interface planned to ship with the C#
+client. Browser files only: no server, API or game data changes.
+
+- **New look.** Black by default, with an optional **white mode** (the sun
+  button, <kbd>T</kbd>, or *Match my system theme* in the search). Calmer
+  type, square-cornered cards, white primary buttons and one accent colour.
+- **Icons everywhere.** A new set of SVG icons drawn for the add-on, on every
+  menu entry, page title, panel, button and order, and a new Playerbots mark
+  and favicon.
+- **Grouped menu** (Monitor, Manage, Help) that shrinks to icons on narrow
+  windows and moves to the bottom of the screen on a phone.
+- **Search everything** with <kbd>Ctrl</kbd> <kbd>K</kbd> or <kbd>/</kbd>:
+  pilots by name or ID, corporations, pages, guide topics and commands; it
+  remembers recently opened pilots and corporations.
+- **Keyboard shortcuts:** <kbd>G</kbd> then a letter for each page,
+  <kbd>R</kbd> refresh, <kbd>L</kbd> pause live updates, <kbd>W</kbd> watch
+  panel, <kbd>T</kbd> theme, <kbd>?</kbd> for the list.
+- **Live updates you control:** pause them, or refresh every 10, 15, 30 or 60
+  seconds. Remembered in the browser.
+- **Notifications:** the bell keeps every order and answer from this visit.
+- **Watch panel** on wide screens: pilots, online, in space and working with
+  trend lines, **pinned pilots** (pin from the pilot panel) and the latest
+  operations.
+- **Activity:** headline numbers with trend lines, job and reason breakdowns
+  with bars and icons.
+- **Pilot panel:** a clearer header, Pin and Copy ID, quick Pause, Stop and
+  Recall buttons, and one card per job with its options.
+- **Corporations:** a filter box on the list; each corporation's page has a
+  header with its numbers and tabs for Overview, Pilots, Logo and Command log.
+  The Logo tab says whether the in-game add-on is installed and links to it.
+- **CSV export** of the pilot list (Activity and a corporation's Pilots tab)
+  and of History, for the current filters, up to 5,000 rows.
+- **Settings:** switches for autonomous work and seeding, and the save bar
+  shows when there are unsaved changes.
+- **Guide:** a new *Getting around the dashboard* topic, and the pages that
+  describe the dashboard follow the new layout.
+- Empty lists say so with an icon and a next step; loading pages show
+  placeholders; everything works with the keyboard and screen readers get
+  labels for icon-only buttons.
+
 ## Unreleased: corporation logos
 
 On the `corp-logos` branch of the ubermidas fork.

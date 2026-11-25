@@ -369,8 +369,11 @@ async function declareRivalryWar(bots = [], options = {}) {
 }
 
 module.exports = {
+  chooseWarDirector,
   declareRivalryWar,
   declareStructureConflictWar,
+  ensureWarTreasury,
+  hasPairWar,
   _testing: { getEligibleStructureConflict, hasPairWar, hasUnfinishedWar, chooseRivalry,
     resetRivalryClock: () => { lastRivalryAttemptAtMs = 0; },
     WAR_DECLARATION_BILL_ISK, WAR_TREASURY_RESERVE_ISK, WAR_MEMBER_WORKING_RESERVE_ISK },

@@ -73,6 +73,13 @@ async function handleIncomingThreat(payload, dependencies = {}) {
   const attackerEntityID = positiveID(attacker && attacker.itemID);
   if (!attackerEntityID) return { handled: false, reason: "attacker-entity-unavailable" };
   let operation = operationRuntime.getOperation(bot.characterID);
+  // Fleet duty answers its own attackers: combat and escort pilots shoot back,
+  // and every pilot stays with its fleet commander instead of running home.
+  if (operation && operation.kind === "fleet-duty" && ["active", "holding"].includes(operation.status)) {
+    require("./playerBotFleetCommandRuntime").noteIncomingThreat(bot.characterID, attackerEntityID);
+    wake(bot.characterID);
+    return { handled: true, action: "fleet-duty-wake", attackerEntityID };
+  }
   const pirateNPC = require("./playerBotCombatPolicy").isPirateNpc(attacker);
   const localSettings = require("./playerBotLocalDefenseConfig").get();
   if (localSettings.enabled && localSettings.systemIDs.includes(Number(payload.scene?.systemID))) {
@@ -257,6 +264,16 @@ function noteIncomingDamage(scene, attackerEntity, targetEntity, targetSession, 
     : 1);
   if (!characterID || !attackerID || !(amount > 0)) return false;
   require("./playerBotLocalDefenseAdapter").reportThreat(scene, attacker, targetEntity, "damage");
+  // Another corporation's pilot shooting a bot is a grievance (see
+  // playerBotGrievanceRuntime.js); NPCs have no pilot and never count.
+  try {
+    const attackerCharacterID = characterIDForEntity(attacker);
+    if (attackerCharacterID) {
+      require("./playerBotGrievanceRuntime").recordAggression({
+        victimCharacterID: characterID, attackerCharacterID, systemID: scene && scene.systemID, whenMs,
+      });
+    }
+  } catch (_) { /* grievances are advisory */ }
   const key = `${characterID}:${attackerID}`;
   const now = Math.max(0, Number(whenMs) || Date.now());
   const last = Number(lastResponseByKey.get(key)) || 0;
