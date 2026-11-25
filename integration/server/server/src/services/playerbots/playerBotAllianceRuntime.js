@@ -50,8 +50,13 @@ function getAllianceFoundingPlan(bot) {
     require("../character/characterState").getCharacterRecord(bot.characterID) || {};
   const names = require("./playerBotNameLibraryRuntime").getRuntime();
   let selected;
-  try { selected = names.chooseName(creator.raceID, "alliances"); }
-  catch (error) { names.reportOnce(error); return null; }
+  // Famous science-fiction alliance names first, then the name library.
+  try { selected = require("./playerBotAllianceFormationRuntime").nextSciFiName(); } catch (_) { selected = null; }
+  if (selected) selected = { name: selected.name, ticker: selected.ticker };
+  if (!selected) {
+    try { selected = names.chooseName(creator.raceID, "alliances"); }
+    catch (error) { names.reportOnce(error); return null; }
+  }
   if (selected) {
     const allianceOptions = { name: selected.name, shortName: selected.ticker, description: position, url: "" };
     const eligible = formation.checkAllianceFormationEligibility({

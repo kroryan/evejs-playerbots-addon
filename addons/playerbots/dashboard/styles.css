@@ -800,3 +800,11 @@ dialog h3 { margin-top: 18px !important; }
 .plain-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
 .plain-list li { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
 .row-actions { white-space: nowrap; text-align: right; }
+
+/* Alliances page */
+.alliance-logo { width: 32px; height: 32px; border-radius: 6px; object-fit: cover; display: block; }
+.alliance-logo.big { width: 96px; height: 96px; }
+.alliance-form { display: grid; gap: 12px; max-width: 640px; }
+.alliance-form label { display: grid; gap: 4px; }
+.alliance-members { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 6px; max-height: 240px; overflow: auto; }
+.alliance-members label { display: flex; gap: 6px; align-items: center; }

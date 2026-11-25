@@ -67,6 +67,7 @@ function defaults() {
     // Bots work within this many jumps of their corporation's headquarters; 0 lets them roam.
     homeRangeJumps: envInteger("EVEJS_PLAYER_BOTS_HOME_RANGE_JUMPS", 5, 0, 30),
     riskTolerance: envInteger("EVEJS_PLAYER_BOTS_RISK_TOLERANCE", 2, 0, 2),
+    allianceMode: envInteger("EVEJS_PLAYER_BOTS_ALLIANCE_MODE", 1, 0, 2),
   };
 }
 
@@ -96,6 +97,7 @@ const BOUNDS = Object.freeze({
   botFleetSize: [2, 10],
   homeRangeJumps: [0, 30],
   riskTolerance: [0, 2],
+  allianceMode: [0, 2],
 });
 
 function readStored() {

@@ -445,6 +445,8 @@ export const TOPICS = [
         "The fleet breaks up when the commander's job ends, it goes offline, its pilots leave, or after about three hours.",
         "These fleets show on the Fleets page marked as the bots' own. You can watch them but not change them.",
       ]),
+      h("Bot alliances"),
+      p("Corporations with a shared enemy and no grudge between them form alliances under famous science-fiction names (or, in population mode, each empire bands together at once). Set the mode under Settings → Headquarters, and set up your own alliances, with a logo, on the <strong>Alliances</strong> page."),
       h("Grievances, gate camps and war"),
       p("Attacks on a corporation's pilots by another corporation are grievances. Two in a day mark the aggressor hostile for a week; three bring a war declaration. While at war or with hostiles about, up to three security pilots camp the headquarters system's gates, shooting war targets and criminals anywhere and hostile corporations in low and null security space. The <strong>Reputation</strong> page lists it all and can mark, declare or forgive by hand."),
       h("Escorts for freighters"),

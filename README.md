@@ -118,6 +118,9 @@ responsive. Work is saved as it goes and resumes after a restart.
 - **Trade:** buying and selling, standing buy and sell rules, courier
   contracts, and mineral buy orders that give hubs outside Jita a real
   market.
+- **Alliances:** corporations ally against shared enemies (or by empire),
+  under famous science-fiction names; set up your own, with a logo, on the
+  dashboard's Alliances page.
 - **Grievances and gate camps:** repeated attacks on a corporation's pilots
   mark the aggressor hostile and then bring a war; security pilots camp their
   headquarters' gates against war targets, criminals and (in low and null)
@@ -348,6 +351,7 @@ and so on; see [Roster and population](GUIDE.md#roster-and-population)).
 | `STARTUP_SEED_BATCH_SIZE` | off | 1–25: create that many pilots while starting |
 | `STARTING_CAPITAL` | 1,000,000,000 | ISK each new pilot starts with |
 | `TRADER_CAPITAL` | 20,000,000,000 | A trader with less is topped up once to this, for its freighters; `0` turns it off |
+| `ALLIANCE_MODE` | 1 | 0 dashboard alliances only, 1 corporations sharing an enemy ally, 2 each empire bands together at start |
 | `RISK_TOLERANCE` | 2 | 0 keeps headquarters miners in high-sec, 1 lets them into low-sec, 2 into null-sec |
 | `HOME_RANGE_JUMPS` | 5 | Pilots more jumps than this from their corporation HQ fly home between jobs; `0` turns it off |
 | `ORDER_RESTORE_DELAY_MS` | 60000 | Wait after start-up before saved corporation orders are re-issued |

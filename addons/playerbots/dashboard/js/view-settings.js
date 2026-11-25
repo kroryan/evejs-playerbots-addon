@@ -18,6 +18,7 @@ const FIELDS = [
   ["maxConcurrentRelocations", "Relocations at once", null, 1, 1000, 1, "", "work"],
   ["maxConcurrentColonySetups", "PI colony setups at once", null, 1, 500, 1, "", "work"],
   ["homeRangeJumps", "Stay within (jumps of HQ)", null, 0, 30, 1, "Between jobs, bots further than this from their corporation's headquarters fly home first. 0 lets them roam.", "home"],
+  ["allianceMode", "Alliance mode (0 off, 1 karma, 2 population)", null, 0, 2, 1, "How bot corporations form alliances besides the ones you set up on the Alliances page: 0 none, 1 corporations with a shared enemy ally, 2 each empire's corporations band together at once.", "home"],
   ["riskTolerance", "Risk tolerance (0 high-sec, 1 low-sec, 2 null-sec)", null, 0, 2, 1, "How far into dangerous space bots work around their headquarters: 0 keeps miners in high-sec, 1 lets them into low-sec, 2 into null-sec.", "home"],
   ["maxBotFleets", "Bot fleets at once", null, 0, 1000, 1, "Mining and combat fleets the bot corporations form on their own.", "fleets"],
   ["botFleetSize", "Pilots per bot fleet", null, 2, 10, 1, "The commander included.", "fleets"],

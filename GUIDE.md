@@ -604,6 +604,25 @@ undocking (up to 5 minutes) and, in each system on the route, for the escort
 to catch up before it takes the next gate (up to 90 seconds). Bot-led mining
 and combat fleets wait at gates too, for up to a minute.
 
+### Bot alliances
+
+Bot corporations form alliances through the game's own alliance authority:
+the founding corporation's CEO creates the alliance (the add-on trains it in
+Empire Control and hands over the 1B ISK fee as an operator grant), the other
+CEOs apply, the executor accepts, and membership takes effect after 24 hours.
+**Alliance mode** (Settings → Headquarters, `EVEJS_PLAYER_BOTS_ALLIANCE_MODE`):
+
+| Mode | What happens |
+| --- | --- |
+| 0 | Only the alliances you set up on the dashboard |
+| 1 (default) | Karma: corporations hostile to, or at war with, the same corporation, and with no grudge between them, ally (up to six); later allies join the existing alliance |
+| 2 | Population: each empire's bot corporations band together at once, four per alliance |
+
+Automatic alliances take famous science-fiction names. The dashboard's
+**Alliances** page lists every plan and its progress, and sets up your own:
+name, ticker, description, founding corporation, allies and a logo (any
+picture, saved as a 128 px PNG and given to the alliance in game).
+
 ### Grievances, hostility and war
 
 Bot corporations answer violence the way player corporations do. Every attack

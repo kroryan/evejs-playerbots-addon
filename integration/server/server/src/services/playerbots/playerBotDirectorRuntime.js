@@ -1794,6 +1794,15 @@ async function runDirectorInternal(bots = [], options = {}) {
         `[PlayerBots] Grievance war planning was skipped: ${String(error && error.message || error).slice(0, 180)}.`,
       );
     }
+    // Corporations band together into alliances (dashboard plans, shared
+    // enemies, or by empire at population, per the alliance mode setting).
+    try {
+      await require("./playerBotAllianceFormationRuntime").maintain(allRosterBots);
+    } catch (error) {
+      require("../../utils/logger").warn(
+        `[PlayerBots] Alliance formation was skipped: ${String(error && error.message || error).slice(0, 180)}.`,
+      );
+    }
   }
   budget.switchStage("roster-indexes");
   await budget.checkpoint();

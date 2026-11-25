@@ -49,6 +49,7 @@ function createPlayerBotAddonApiRuntime(options = {}) {
   const corporationLogos = options.corporationLogos || require("./playerBotCorporationLogoStore").getCorporationLogoStore();
   const fleetCommand = options.fleetCommand || require("./playerBotFleetCommandRuntime");
   const grievances = options.grievances || require("./playerBotGrievanceRuntime");
+  const alliances = options.alliances || require("./playerBotAllianceFormationRuntime");
   const eventLoopDelay = options.eventLoopDelayMonitor || monitorEventLoopDelay({ resolution: 20 });
   const getEventLoopDelayP95Ms = options.getEventLoopDelayP95Ms || (() => Number(eventLoopDelay.percentile(95)) / 1_000_000 || 0);
   eventLoopDelay.enable();
@@ -351,6 +352,17 @@ function createPlayerBotAddonApiRuntime(options = {}) {
       if (typeof dashboard.invalidate === "function") dashboard.invalidate();
       logger.info(`[PlayerBotsAddon] Dashboard fleet order ${String(body.action).slice(0, 20)} fc=${Number(body.commanderID) || 0}: ${String(result.message || "").slice(0, 160)}`);
       sendJson(response, result.success ? 200 : Number(result.statusCode) || 400, result);
+      return;
+    }
+    if (request.method === "GET" && url.pathname === "/v1/dashboard/alliances") {
+      sendJson(response, 200, alliances.getOverview());
+      return;
+    }
+    if (request.method === "POST" && url.pathname === "/v1/dashboard/alliance-command") {
+      const body = await readBody(request, MAX_LOGO_BODY_BYTES);
+      const result = alliances.runCommand(body);
+      logger.info(`[PlayerBotsAddon] Dashboard alliance order ${String(body.action).slice(0, 12)}: ${String(result.message || "").slice(0, 160)}`);
+      sendJson(response, result.success ? 200 : 400, result);
       return;
     }
     if (request.method === "GET" && url.pathname === "/v1/dashboard/reputation") {

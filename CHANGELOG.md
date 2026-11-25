@@ -3,6 +3,25 @@
 Newest first. The Docker add-on keeps the upstream version number (0.2.152);
 the Windows launcher package adds a fourth number for its own releases.
 
+## Unreleased: bot alliances
+
+- **Corporations form alliances.** Alliance mode (Settings,
+  `EVEJS_PLAYER_BOTS_ALLIANCE_MODE`): 0 dashboard plans only, 1 karma (default:
+  corporations sharing an enemy and holding no grudge against each other ally,
+  up to six), 2 population (each empire's bot corporations band together at
+  once, four per alliance). Everything goes through the game's alliance
+  authority: the founder's CEO creates the alliance (trained in Empire Control
+  and handed the 1B fee as an operator grant), allies apply and are accepted,
+  effective after 24 hours.
+- Alliances take famous science-fiction names (Rebel Alliance, Interstellar
+  Alliance, Outer Planets Alliance, ...), including those founded by
+  sovereignty pilots.
+- **Alliances page** on the dashboard: every plan with its logo, founder,
+  allies and progress, and a form to set up your own: name (with
+  suggestions), ticker, description, founder, allies and a logo picture.
+- Tested on the test server: in population mode two alliances were founded
+  within seconds of start-up.
+
 ## Unreleased: grievances, gate camps and wider trade
 
 - **Grievances.** Every attack on a bot by another corporation's pilot (bot or
