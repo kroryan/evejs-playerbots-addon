@@ -7,7 +7,7 @@ dashboard's built-in **Guide** page covers the same ground in shorter form.
 
 **Contents:** [Running the server](#running-the-server) ·
 [Roster and population](#roster-and-population) ·
-[The dashboard](#the-dashboard) · [Chat commands](#chat-commands) ·
+[The dashboard](#the-dashboard) · [Chat commands](#chat-commands) ([command reference](#command-reference)) ·
 [How the bots work](#how-the-bots-work) ·
 [Recovery and safety](#recovery-and-safety) ·
 [Performance and capacity](#performance-and-capacity) ·
@@ -507,6 +507,110 @@ not working; Corporations gives recall, work, HQ, deposit, priority and
 per-pilot orders; History, World (systems, territory, killboard), Performance
 and Settings cover the rest. See [The dashboard](#the-dashboard).
 
+### Command reference
+
+Every chat command in one place, grouped as on the dashboard's Guide page.
+`<bot>` is a bot's name or character ID. Commands that change a bot work on
+bots in your corporation or fleet; staff can command any bot. Commands marked
+CEO/staff or staff need that authority. The sections after this one explain
+each group in detail. Fleet duty, bot alliances and reputation are run from
+the dashboard (Fleets, Alliances and Reputation pages) and have no chat
+command; trade hauler upgrades and gate camps use `upgrade ... trade` and
+`combat ... gate-camp`.
+
+**Roster and status**
+
+| Command | What it does |
+| --- | --- |
+| `/playerbots status` | Roster size, target and corporation counts |
+| `/playerbots list [filter]` | Pilots with specialty and corporation |
+| `/playerbots inspect <bot>` | Everything about one bot (e.g. `/playerbots inspect Zara Vex`) |
+| `/playerbots ops [page]` | Live roster, 10 pilots per page (e.g. `/playerbots ops 1`) |
+| `/playerbots ops systems [page]` | Totals per solar system |
+| `/playerbots ops [page] system <systemID>` | Pilots in one system (e.g. `/playerbots ops 1 system 30000142`) |
+| `/playerbots tasks [queued\|leased\|completed\|failed\|canceled]` | Saved work tasks |
+| `/playerbots orders` | Player buy orders bots can fill |
+| `/botlocal [all]` | Bots in your system, or everywhere |
+| `/playerbots seed [30-15000]` | Set the roster target and start seeding (staff) (e.g. `/playerbots seed 1000`) |
+
+**Directing work**
+
+| Command | What it does |
+| --- | --- |
+| `/playerbots autowork [status\|on\|off]` | Show or switch automatic work (on/off: staff) |
+| `/playerbots pause <bot>` | Pause one bot |
+| `/playerbots resume <bot>` | Resume one bot |
+| `/playerbots corp pause` | Pause the bots in your corporation |
+| `/playerbots corp resume` | Resume the bots in your corporation |
+| `/playerbots op status\|stop\|resume <bot>` | Check, stop or resume a bot's current job (e.g. `/playerbots op status Zara Vex`) |
+| `/playerbots mine <bot> [trips] [station <id>] [norefine] [nosell]` | Go mining (e.g. `/playerbots mine Zara Vex 3`) |
+| `/playerbots colony <bot>` | Set up a PI colony |
+| `/playerbots haul <bot> <itemID\|typeID> <from> <to> [quantity]` | Move goods between stations |
+| `/playerbots upgrade <bot> [mining\|logistics\|security\|piracy\|sovereignty\|trade] [force]` | Buy and fit the next ship on a ladder (trade: the hauler line up to the Jump Freighter) (e.g. `/playerbots upgrade Zara Vex mining`) |
+| `/playerbots route <bot> <system>` | Travel by stargate (e.g. `/playerbots route Zara Vex Dodixie`) |
+| `/playerbots undock <bot>` | Undock |
+| `/playerbots warp <bot> <entityID>` | Warp to something nearby |
+| `/playerbots dock <bot> <stationID>` | Dock at a station |
+| `/playerbots task cancel\|retry <taskID>` | Cancel a queued task or retry a failed one |
+
+**Corporations**
+
+| Command | What it does |
+| --- | --- |
+| `/bots corp recall [corpID] [station\|structure <id>]` | Everyone home and hold (e.g. `/bots corp recall`) |
+| `/bots corp work [corpID] [auto\|mine\|pi\|director] [trips <n>]` | Lift the hold and start work (e.g. `/bots corp work mine trips 3`) |
+| `/bots corp status [corpID]` | Who is home, held, travelling or working |
+| `/bots corp hq [corpID] [list \| set <id> \| clear]` | Show or change headquarters (CEO/staff) |
+| `/bots corp deposit [corpID] [status\|on\|off\|auto\|deliveries\|hangar <1-7>]` | Where mined and PI goods go (CEO/staff) (e.g. `/bots corp deposit hangar 2`) |
+| `/bots corp inviteall [status\|cancel]` | Recruit eligible bots into the target corporation (e.g. `/bots corp inviteall`) |
+| `/bots corp help` | Corporation help in game |
+
+**Fleets and fittings**
+
+| Command | What it does |
+| --- | --- |
+| `/playerbots invite <bot>` | Invite a bot to your corporation |
+| `/playerbots join <bot>` | Ask a bot's corporation to invite you |
+| `/playerbots fleet add <bot>` | Add a bot to your fleet |
+| `/playerbots fleet join <bot>` | Ask a bot to invite you to its fleet |
+| `/follow [me\|<name>\|stop]` | Fleet chat: follow you or someone else (e.g. `/follow`) |
+| `/escort [me\|<name>\|stop]` | Fleet chat: security bots escort (e.g. `/escort`) |
+| `/attack [all\|<bot>]` | Fleet chat: attack your latest locked target (e.g. `/attack`) |
+| `/attack stop [all\|<bot>]` | Fleet chat: call off the attack (e.g. `/attack stop`) |
+| `/playerbots fit <bot> <fittingID\|link> [maxISK]` | Fit a bot from a saved fitting |
+| `/fitbot <fittingID\|link> [maxISK]` | The same, in a private chat with the bot |
+| `/playerbots fund <bot> <ISK>` | Give a bot some of your ISK (max 1B per transfer) |
+
+**Industry, PI and trade**
+
+| Command | What it does |
+| --- | --- |
+| `/playerbots industry cycle start <bot> <blueprintTypeID> <runs> <maxISK> [station <id>] [floor <ISK>] [corp <hangar> <wallet>]` | Run a manufacturing cycle |
+| `/playerbots industry cycle status\|stop\|resume <bot>` | Manage the cycle |
+| `/playerbots industry list\|blueprints\|jobs <bot>` | Blueprints and jobs |
+| `/playerbots industry auto set <bot> <blueprintItemID> <runs> <maxISK>` | Automatic in-place manufacturing |
+| `/playerbots industry auto status\|off <bot>` | Check or stop it |
+| `/playerbots task pi <bot>` | Queue PI extractor upkeep |
+| `/playerbots pi export set <bot> <planetID> <maxUnits> <maxTaxISK>` | Recurring PI exports |
+| `/playerbots pi export status\|off <bot> <planetID>` | Check or stop exports |
+| `/playerbots trade quote <bot> <typeID>` | Best local prices (e.g. `/playerbots trade quote Zara Vex 34`) |
+| `/playerbots trade buy <bot> <typeID> <qty> <maxUnitPrice>` | Buy now |
+| `/playerbots trade sell <bot> <itemID> [qty] <minUnitPrice>` | Sell now |
+| `/playerbots trade autosell set <bot> <typeID> <minUnitPrice> <maxUnits>` | Keep selling |
+| `/playerbots trade autobuy set <bot> <typeID> <maxUnitPrice> <targetStock> <maxSpendPerCycle>` | Keep restocking |
+| `/playerbots trade autosell\|autobuy status\|off <bot>` | Check or stop a trade rule |
+| `/playerbots courier post <issuer> <carrier> <from> <to> <itemID> <qty> <reward> <collateral>` | Courier contract between two bots |
+
+**Combat and territory**
+
+| Command | What it does |
+| --- | --- |
+| `/playerbots combat <bot> [security\|war\|piracy\|nullsec-conflict\|gate-camp]` | Combat patrol; gate-camp holds a gate in the HQ system (e.g. `/playerbots combat Zara Vex security`) |
+| `/playerbots sovereignty <bot>` | Sovereignty work |
+| `/playerbots build <bot> <structurePackageItemID> [nullSystemID]` | Deploy a structure in null-sec |
+| `/playerbots alliance found <CEO bot>` | Found an alliance |
+| `/playerbots defense status\|events\|set <json>\|off\|cancel <id>` | Optional local defense (staff) (e.g. `/playerbots defense status`) |
+
 ### Inspect the roster and work
 
 | Command | Use |
@@ -553,7 +657,7 @@ remote chat delivery can be checked without guessing at host load.
 | `/playerbots mine <bot> [trips] [station <stationID>] [norefine] [nosell]` | Mine from asteroid belts, return when full or after the trip limit, unload and optionally refine/sell. `norefine` retains ore; `nosell` retains output for industry or later work. |
 | `/playerbots colony <bot>` | Set up a passive PI colony. Once setup completes, the pilot returns to normal work; scheduled PI collection/export can be done independently. |
 | `/playerbots haul <bot> <itemID|typeID> <fromStation> <toStation> [quantity]` | Haul personal hangar goods through the ship cargo hold, obeying capacity and route rules. |
-| `/playerbots upgrade <bot> [mining|logistics|security|piracy|sovereignty] [force]` | Buy and fit the next role-appropriate ship. The old hull stays in the hangar. `force` bypasses the normal minimum wallet threshold, but purchases still use the bot wallet. |
+| `/playerbots upgrade <bot> [mining|logistics|security|piracy|sovereignty|trade] [force]` | Buy and fit the next role-appropriate ship (`trade`: the hauler line up to the Jump Freighter; see [Trade haulers](#trade-haulers)). The old hull stays in the hangar. `force` bypasses the normal minimum wallet threshold, but purchases still use the bot wallet. |
 | `/playerbots route <bot> <systemID|exact system name>` | Queue a durable stargate route; the bot undocks as needed and retries travel stages. |
 | `/playerbots undock <bot>` | Undock a bot you control. |
 | `/playerbots warp <bot> <entityID>` | Order a local warp to an entity. |
@@ -751,7 +855,7 @@ market orders, and PI launch state before scheduling another one.
 
 | Command | Use |
 | --- | --- |
-| `/playerbots combat <bot> [security|war|piracy|nullsec-conflict]` | Start a durable combat assignment in the selected mode. |
+| `/playerbots combat <bot> [security|war|piracy|nullsec-conflict|gate-camp]` | Start a durable combat assignment in the selected mode. `gate-camp` holds a stargate in the corporation's HQ system against lawful targets (see [Grievances, hostility and war](#grievances-hostility-and-war)). |
 | `/playerbots sovereignty <bot>` | Start sovereignty work for an eligible pilot and corporation. |
 | `/playerbots build <bot> <structurePackageItemID> [nullSystemID]` | Carry an owned Upwell structure package to a reachable claimable null-sec system and deploy through the normal structure authorities. |
 | `/playerbots alliance found <CEO bot>` | Start alliance founding for a corporation's eligible bot CEO. Skill, wallet reserve, and founding fee checks apply. |

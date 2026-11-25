@@ -5,6 +5,9 @@ the Windows launcher package adds a fourth number for its own releases.
 
 ## Unreleased: corporation hangars
 
+- Chat and dashboard orders accept `upgrade <bot> trade` (the hauler line) and
+  `combat <bot> gate-camp`; the guide has a full command reference table.
+
 - **Deposits go to corporation hangars.** Corporation Deliveries cannot be
   opened in EveJS, so mining and PI deposits now go into the corporation's
   office hangar at headquarters: ore and minerals to division 1 (Mining), PI

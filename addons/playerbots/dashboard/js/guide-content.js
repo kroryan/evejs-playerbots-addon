@@ -808,7 +808,7 @@ export const COMMANDS = [
   ["Directing work", "/playerbots mine <bot> [trips] [station <id>] [norefine] [nosell]", "Go mining", "/playerbots mine Zara Vex 3"],
   ["Directing work", "/playerbots colony <bot>", "Set up a PI colony", ""],
   ["Directing work", "/playerbots haul <bot> <itemID|typeID> <from> <to> [quantity]", "Move goods between stations", ""],
-  ["Directing work", "/playerbots upgrade <bot> [mining|logistics|security|piracy|sovereignty] [force]", "Buy and fit the next ship", "/playerbots upgrade Zara Vex mining"],
+  ["Directing work", "/playerbots upgrade <bot> [mining|logistics|security|piracy|sovereignty|trade] [force]", "Buy and fit the next ship on a ladder (trade: the hauler line up to the Jump Freighter)", "/playerbots upgrade Zara Vex mining"],
   ["Directing work", "/playerbots route <bot> <system>", "Travel by stargate", "/playerbots route Zara Vex Dodixie"],
   ["Directing work", "/playerbots undock <bot>", "Undock", ""],
   ["Directing work", "/playerbots warp <bot> <entityID>", "Warp to something nearby", ""],
@@ -851,7 +851,7 @@ export const COMMANDS = [
   ["Industry, PI and trade", "/playerbots trade autosell|autobuy status|off <bot>", "Check or stop a trade rule", ""],
   ["Industry, PI and trade", "/playerbots courier post <issuer> <carrier> <from> <to> <itemID> <qty> <reward> <collateral>", "Courier contract between two bots", ""],
   // Combat and territory
-  ["Combat and territory", "/playerbots combat <bot> [security|war|piracy|nullsec-conflict]", "Combat patrol", "/playerbots combat Zara Vex security"],
+  ["Combat and territory", "/playerbots combat <bot> [security|war|piracy|nullsec-conflict|gate-camp]", "Combat patrol; gate-camp holds a gate in the HQ system", "/playerbots combat Zara Vex security"],
   ["Combat and territory", "/playerbots sovereignty <bot>", "Sovereignty work", ""],
   ["Combat and territory", "/playerbots build <bot> <structurePackageItemID> [nullSystemID]", "Deploy a structure in null-sec", ""],
   ["Combat and territory", "/playerbots alliance found <CEO bot>", "Found an alliance", ""],

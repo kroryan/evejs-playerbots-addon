@@ -280,8 +280,8 @@
     },
     "server/src/services/chat/chatCommands.js": {
       "baseSha256": "344e9c97bbeeb1714ded4124c6ff4d2b030cf9ec1d9b2d9e1825836b571c9530",
-      "sourceSha256": "d32c37d7df534e87d4126df632c399775ef7f3ac178697c7c382a610808af80e",
-      "overlaySha256": "d32c37d7df534e87d4126df632c399775ef7f3ac178697c7c382a610808af80e",
+      "sourceSha256": "282f2350ef8fa0e56798b267a92dedf2328a6abfbafd313c47d68e91f74eae95",
+      "overlaySha256": "282f2350ef8fa0e56798b267a92dedf2328a6abfbafd313c47d68e91f74eae95",
       "subsystem": "chat-commands"
     },
     "server/src/services/chat/commandSessionEffects.js": {
@@ -605,8 +605,8 @@
     "server/src/services/playerbots/playerBotDashboardCommands.js": {
       "baseSha256": null,
       "subsystem": "playerbots-core",
-      "sourceSha256": "a39acf1368fed5821a2659c39e338b3ea8e259450a1adbb31633433a78323fc5",
-      "overlaySha256": "a39acf1368fed5821a2659c39e338b3ea8e259450a1adbb31633433a78323fc5"
+      "sourceSha256": "864dbb6aba3e3094619da9cc66982713e7ce88127d3d9bfb9c8f7dffab3efae4",
+      "overlaySha256": "864dbb6aba3e3094619da9cc66982713e7ce88127d3d9bfb9c8f7dffab3efae4"
     },
     "server/src/services/playerbots/playerBotDashboardRuntime.js": {
       "baseSha256": null,
@@ -1146,8 +1146,8 @@
     "addons/playerbots/dashboard/js/api.js": "dcb7c40bbeed47b6ed5279bc1c013b693e7a308fd321aa4676101f0f9dd99fa9",
     "addons/playerbots/dashboard/js/app.js": "f3a66e1305ea85f916710a3f19984b0acce00577935888f6c67157ede608a68e",
     "addons/playerbots/dashboard/js/csv.js": "461a8b9760d48cff7f28c711f0a1023132620de549faa2b5157c1537e1236818",
-    "addons/playerbots/dashboard/js/drawer.js": "e707fce38c480d8dd4acbbbef33003dd9d6de455455050302c52fb263aa70b17",
-    "addons/playerbots/dashboard/js/guide-content.js": "1580ced5993dc1af1e86210cd1f6ba8b085df77646fc096ad57c9b4d46f86d9b",
+    "addons/playerbots/dashboard/js/drawer.js": "4cdba5a30776b7c3d68bc226d263b8fbf150d51ee8ae2838c904b3ee1c319bec",
+    "addons/playerbots/dashboard/js/guide-content.js": "4e9d1bb4c8b8ffe1d9398650bab1a0dc2698c40534619c4f513dc28fd84658fc",
     "addons/playerbots/dashboard/js/icons.js": "3832fe601b3d9368779b14c7279f0843acafb18c9fc7986114aba91882711f14",
     "addons/playerbots/dashboard/js/palette.js": "7d2487b96c91f4b3ce225c36a99e5f383a08e8b7ecc229d613fae3294c2bb1d4",
     "addons/playerbots/dashboard/js/prefs.js": "899fde1b10c31874f5c0af4f816155059dd973b475508036616077c605fe51d0",
