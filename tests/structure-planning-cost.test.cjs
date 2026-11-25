@@ -18,6 +18,8 @@ function load({ structures = [], ceoID = 0, managers = [] } = {}) {
   const calls = { listStructures: 0, peekStructures: 0, actorSession: 0, typeLookups: 0, operationScans: 0 };
   const bots = [1001, 1002, 1003].map((characterID) => ({ characterID, corporationID: 42, status: "active" }));
   const services = {
+    // The real hull list: plain data, no further requires.
+    "./playerBotTransportHulls": require(path.join(path.dirname(file), "playerBotTransportHulls")),
     "../../space/worldData": {},
     "../character/characterState": { getCharacterRecord: (id) => ({ characterID: id, corporationID: 42 }) },
     "../structure/structureState": {
