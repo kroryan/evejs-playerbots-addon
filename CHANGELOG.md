@@ -3,6 +3,26 @@
 Newest first. The Docker add-on keeps the upstream version number (0.2.152);
 the Windows launcher package adds a fourth number for its own releases.
 
+## Unreleased: bot-led fleets
+
+- **Bot corporations form their own fleets.** A bot mining from a station or
+  ratting in a system leads; corpmates mining from the same station, or idle
+  in that system with a fitting ship, join and fly fleet duty behind it. The
+  commander waits for its pilots before undocking or warping off; full miners
+  without a fleet hangar to fill stay with it and unload when the fleet docks.
+  Fleets break up when the commander's job ends, it goes offline, its pilots
+  leave, or after about three hours.
+- Shown read-only on the Fleets page. New settings: **Bot fleets** on/off,
+  **Bot fleets at once** (20) and **Pilots per bot fleet** (5), with matching
+  `EVEJS_PLAYER_BOTS_BOT_FLEETS`, `..._MAX_BOT_FLEETS` and `..._BOT_FLEET_SIZE`.
+- The engine no longer disbands a fleet that has no person in it when the bots
+  formed it on purpose.
+- Fix: fleet duty found a fleet's boss through a function the engine does not
+  export; it now reads the boss from the fleet itself.
+- Tested on the test server: two bots of one corporation formed a mining fleet
+  on their own; the member crossed three systems, warped to the commander,
+  mined, docked with it, repaired after a rat attack and unloaded at home.
+
 ## Unreleased: fleet duty
 
 On the `dashboard-redesign` branch, after the redesign. Server and dashboard.

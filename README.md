@@ -200,7 +200,7 @@ The menu on the left groups the pages by what you are doing:
 | **Activity** | How many pilots are online, in space and working, with trend lines; how many are working, travelling, holding, queued, paused, standing by, idle or offline; what they are doing; why the others are not; a searchable pilot list with CSV export. |
 | **Pilot panel** | Click any pilot: what it is doing and why, its location, ship, current job step by step, recent jobs with ISK in and out, and orders (pause, resume, stop, recall, mine, colony, patrol, upgrade). Pin it to keep it in the watch panel. |
 | **Corporations** | Every bot corporation, with a filter; a page each with tabs for an overview (whole-corporation orders, headquarters, where goods go, work priorities), its pilots and per-pilot orders, a picture logo and the order log. |
-| **Fleets** | Every fleet with bots in it. The fleet commander picks the kind of fleet (mining, combat, hauling or escort) and a fitting; the bots fit up, dock and undock with the FC, follow the FC in warp and do the job on grid. |
+| **Fleets** | Every fleet with bots in it. The fleet commander picks the kind of fleet (mining, combat, hauling or escort) and a fitting; the bots fit up, dock and undock with the FC, follow the FC in warp and do the job on grid. Mining and combat fleets the bot corporations form on their own are shown too, read-only. |
 | **History** | Every finished and running job, with filters, a step-by-step timeline and CSV export. |
 | **World** | Systems, territory (fleets, wars, structures, sovereignty) and the killboard. |
 | **Performance** | Server load, director timing and long server ticks. |

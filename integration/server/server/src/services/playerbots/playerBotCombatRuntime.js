@@ -1234,6 +1234,8 @@ async function advanceCombat(operation, bot, kit) {
     kit.save(operation);
   }
   if (operation.stage === "undock") {
+    // A bot leading its own fleet waits for its pilots, as a person would.
+    if (fleetCommanderShouldWait(bot.characterID, "undock")) return { delayMs: 5_000 };
     const session = space.getActorSession(bot);
     const fitRole = operation.mode === "piracy" ? "piracy" : "security";
     const fitProfile = require("./playerBotOperationRuntime").getRoleShipFitProfile(bot, fitRole);
@@ -1324,6 +1326,9 @@ async function advanceCombat(operation, bot, kit) {
   if (operation.stage === "to-anomaly") {
     const state = space.getSpaceState(bot);
     if (!state.inSpace || state.busy) return { delayMs: 15_000 };
+    // A bot leading its own fleet waits for its pilots, as a person would.
+    if (fleetCommanderShouldWait(bot.characterID, "warp")) return { delayMs: 5_000 };
+
     if (Number(state.systemID) !== Number(operation.targetSystemID)) return { delayMs: 15_000 };
     const siteInstance = getSiteInstance(operation);
     if (!siteInstance) {
@@ -2271,3 +2276,12 @@ module.exports = {
     findWreckForTarget,
   },
 };
+
+// Bot-led fleets (playerBotFleetCommandRuntime.js): a commander waits for its pilots.
+function fleetCommanderShouldWait(characterID, phase) {
+  try {
+    return require("./playerBotFleetCommandRuntime").commanderShouldWait(characterID, phase) === true;
+  } catch (_) {
+    return false;
+  }
+}

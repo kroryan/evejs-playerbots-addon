@@ -401,7 +401,7 @@ export const TOPICS = [
     group: "play",
     title: "Running a bot fleet",
     summary: "Tell the bots in your fleet what kind of fleet it is; they fit up, stay with you and do the job.",
-    keywords: "fleet duty fleets page commander fc mining combat hauling escort fitting fleet hangar jet can warp undock dock rats ore",
+    keywords: "fleet duty fleets page commander fc mining combat hauling escort fitting fleet hangar jet can warp undock dock rats ore bot fleets autonomous corpmates",
     body: () => [
       p("On the <strong>Fleets</strong> page, the person leading a fleet (the fleet commander, or FC) can put the fleet's bots to work. Bots on fleet duty take no other work until the FC stands the fleet down."),
       h("Start a fleet"),
@@ -436,6 +436,15 @@ export const TOPICS = [
         "<strong>Call in busy bots</strong> stops the bots' own work so they join now. Trades and industry jobs already underway finish first.",
       ]),
       tip("Your choices are saved for you as FC, so the next fleet you form with bots starts with the same kind of fleet and fittings."),
+      h("Fleets the bots form themselves"),
+      p("Bot corporations also fly together on their own, like groups of players. A bot already mining from a station, or ratting in a system, becomes fleet commander and brings in corpmates: other miners working from the same station, and idle corpmates docked nearby with a ship for the job. The corpmates fly fleet duty behind it exactly as described above."),
+      list([
+        "A bot commander waits for its pilots before undocking (up to two minutes) or warping off (up to a minute).",
+        "With no fleet hangar to fill, a full miner stays with its commander and unloads into its own hangar when the fleet docks.",
+        "The fleet breaks up when the commander's job ends, it goes offline, its pilots leave, or after about three hours.",
+        "These fleets show on the Fleets page marked as the bots' own. You can watch them but not change them.",
+      ]),
+      p(`Turn them off, or change how many form and how big they get, under ${see("settings", "Settings")} → <strong>Bot fleets</strong>.`),
     ].join(""),
   },
   {

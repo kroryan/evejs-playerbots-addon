@@ -17,6 +17,8 @@ const FIELDS = [
   ["maxConcurrentWork", "Work slots", null, 1, 5000, 1, "Pilots that may run operations at once.", "work"],
   ["maxConcurrentRelocations", "Relocations at once", null, 1, 1000, 1, "", "work"],
   ["maxConcurrentColonySetups", "PI colony setups at once", null, 1, 500, 1, "", "work"],
+  ["maxBotFleets", "Bot fleets at once", null, 0, 1000, 1, "Mining and combat fleets the bot corporations form on their own.", "fleets"],
+  ["botFleetSize", "Pilots per bot fleet", null, 2, 10, 1, "The commander included.", "fleets"],
   ["directorThinkMinSeconds", "Director think minimum (s)", ["directorThinkMinMs", 1000], 15, 3600, 1, "", "advanced"],
   ["directorThinkMaxSeconds", "Director think maximum (s)", ["directorThinkMaxMs", 1000], 15, 3600, 1, "", "advanced"],
   ["directorInitialSpreadSeconds", "Director initial spread (s)", ["directorInitialSpreadMs", 1000], 1, 3600, 1, "", "advanced"],
@@ -105,6 +107,7 @@ function pageHtml(effectiveAutowork, roster) {
       <div id="seed-status" class="notice info" style="margin:14px 0 0"></div></div></div>
     <div class="panel"><div class="panel-head"><div><h2>${icon("users")}Population</h2><p>How many pilots exist, how many are online, and where they may gather</p></div></div><div class="panel-body"><div class="form-grid">${group("population")}</div></div></div>
     <div class="panel"><div class="panel-head"><div><h2>${icon("briefcase")}Work capacity</h2><p>How much work runs at the same time</p></div></div><div class="panel-body"><div class="form-grid">${group("work")}</div></div></div>
+    <div class="panel"><div class="panel-head"><div><h2>${icon("fleet")}Bot fleets</h2><p>Bot corporations fly together like players: a miner or ratter leads, and corpmates working the same station or system join its fleet. You can watch these fleets on the Fleets page but not change them.</p></div></div><div class="panel-body"><div class="form-grid">${checkHtml("botFleetsEnabled", "Bot fleets", "Bots form their own mining and combat fleets.")}${group("fleets")}</div></div></div>
     <div class="panel"><div class="panel-body" style="padding-top:14px"><details class="advanced"><summary>${icon("chevron-right", { size: 16 })}Advanced: director, add-on cycle and seeding safety</summary>
       <h3 class="section-label">Director and add-on cycle</h3><div class="form-grid">${group("advanced")}</div>
       <h3 class="section-label">Seeding safety</h3><div class="form-grid">${group("seeding")}</div></details></div></div>
@@ -123,13 +126,14 @@ function bodyFromForm(form) {
   const body = {};
   for (const field of FIELDS) {
     const [name, , convert] = field;
-    if (isLocked(settingKey(field))) continue;
+    // Servers from before a setting existed do not accept it.
+    if (isLocked(settingKey(field)) || !Object.hasOwn(saved, settingKey(field))) continue;
     const value = Number(form.elements.namedItem(name).value);
     if (convert) body[convert[0]] = Math.round(value * convert[1]);
     else body[name] = value;
   }
-  for (const key of ["autoworkEnabled", "rosterSeedEnabled"]) {
-    if (!isLocked(key)) body[key] = form.elements.namedItem(key).checked;
+  for (const key of ["autoworkEnabled", "rosterSeedEnabled", "botFleetsEnabled"]) {
+    if (!isLocked(key) && Object.hasOwn(saved, key)) body[key] = form.elements.namedItem(key).checked;
   }
   return body;
 }

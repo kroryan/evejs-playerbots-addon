@@ -400,8 +400,8 @@
     },
     "server/src/services/fleets/fleetRuntime.js": {
       "baseSha256": "a676beaa6509cda39d640d86f13c91466b5cc0adcc70ee05c96aaa52e29f5371",
-      "sourceSha256": "d2f496dfeef2aea0c322b126a8fbe5c2ba3704bbe0bb4b997c12113507312b33",
-      "overlaySha256": "d2f496dfeef2aea0c322b126a8fbe5c2ba3704bbe0bb4b997c12113507312b33",
+      "sourceSha256": "82c4130ab995ef59b5087ae7fee5da0be61fbc2aac79f656d750cdd25c763c68",
+      "overlaySha256": "82c4130ab995ef59b5087ae7fee5da0be61fbc2aac79f656d750cdd25c763c68",
       "subsystem": "fleets"
     },
     "server/src/services/mail/mailState.js": {
@@ -538,14 +538,14 @@
     },
     "server/src/services/playerbots/playerBotCombatRuntime.js": {
       "baseSha256": null,
-      "sourceSha256": "3688ba1c40fd7996adc39c230c8420926d1d76dda59b61d394748db268a1a986",
-      "overlaySha256": "3688ba1c40fd7996adc39c230c8420926d1d76dda59b61d394748db268a1a986",
+      "sourceSha256": "c40badead399b72876d337d86cdc74ab5c0e4bf211a98ca427e049e59ec9ae10",
+      "overlaySha256": "c40badead399b72876d337d86cdc74ab5c0e4bf211a98ca427e049e59ec9ae10",
       "subsystem": "playerbots-core"
     },
     "server/src/services/playerbots/playerBotConfigurationRuntime.js": {
       "baseSha256": null,
-      "sourceSha256": "06bb31d27b1e6285c5d9b819f96e8a6479bc11e0bcbe7a913d0606422d2d45ea",
-      "overlaySha256": "06bb31d27b1e6285c5d9b819f96e8a6479bc11e0bcbe7a913d0606422d2d45ea",
+      "sourceSha256": "9c87641a7203105f845b45810abf034a8dd3aa13544cbeea0d83d3e0104d05c4",
+      "overlaySha256": "9c87641a7203105f845b45810abf034a8dd3aa13544cbeea0d83d3e0104d05c4",
       "subsystem": "playerbots-core"
     },
     "server/src/services/playerbots/playerBotConnectionScheduleRuntime.js": {
@@ -658,8 +658,8 @@
     },
     "server/src/services/playerbots/playerBotFleetCommandRuntime.js": {
       "baseSha256": null,
-      "sourceSha256": "e80a557c0a8afc6af8b3dcdfb2ec44f3b6f677fac0f810db659b062a65b30d09",
-      "overlaySha256": "e80a557c0a8afc6af8b3dcdfb2ec44f3b6f677fac0f810db659b062a65b30d09",
+      "sourceSha256": "744819c7e983dda5e408dcc04d804ce60d780605d3168bf4f69ad20e0a3bd1db",
+      "overlaySha256": "744819c7e983dda5e408dcc04d804ce60d780605d3168bf4f69ad20e0a3bd1db",
       "subsystem": "playerbots-core"
     },
     "server/src/services/playerbots/playerBotHeadquartersNameRuntime.js": {
@@ -766,8 +766,8 @@
     },
     "server/src/services/playerbots/playerBotOperationRuntime.js": {
       "baseSha256": null,
-      "sourceSha256": "d54e93472b7fb523ce9121726b887e4235bab4d11485dfe321a925954815bc4b",
-      "overlaySha256": "d54e93472b7fb523ce9121726b887e4235bab4d11485dfe321a925954815bc4b",
+      "sourceSha256": "bee967544972fb7bb3dbd0e06b97e1e057151764c2d24264af863f822387db5d",
+      "overlaySha256": "bee967544972fb7bb3dbd0e06b97e1e057151764c2d24264af863f822387db5d",
       "subsystem": "playerbots-core"
     },
     "server/src/services/playerbots/playerBotOpsSummary.js": {
@@ -1117,7 +1117,7 @@
     "addons/playerbots/dashboard/js/app.js": "38e95d4cca65f59460ed4462dd776e8ac2c39cb9e08eb4f554786cb3a9000222",
     "addons/playerbots/dashboard/js/csv.js": "461a8b9760d48cff7f28c711f0a1023132620de549faa2b5157c1537e1236818",
     "addons/playerbots/dashboard/js/drawer.js": "e707fce38c480d8dd4acbbbef33003dd9d6de455455050302c52fb263aa70b17",
-    "addons/playerbots/dashboard/js/guide-content.js": "62949429d463f88a21bd0435babc8ef321e97d10195404aab5be7f7ba55e9a1b",
+    "addons/playerbots/dashboard/js/guide-content.js": "68654db59230a74fee4671384d2890eb10dcc2b4738f1ce837fb8d5f1244cf53",
     "addons/playerbots/dashboard/js/icons.js": "3832fe601b3d9368779b14c7279f0843acafb18c9fc7986114aba91882711f14",
     "addons/playerbots/dashboard/js/palette.js": "7d2487b96c91f4b3ce225c36a99e5f383a08e8b7ecc229d613fae3294c2bb1d4",
     "addons/playerbots/dashboard/js/prefs.js": "899fde1b10c31874f5c0af4f816155059dd973b475508036616077c605fe51d0",
@@ -1126,11 +1126,11 @@
     "addons/playerbots/dashboard/js/ui.js": "8ba722a3907cfeb1455ade03333b57269547e92955701ff05b7cedcb36905099",
     "addons/playerbots/dashboard/js/view-activity.js": "2a7b715da2bf7c6ef9ecf52bbdcb7a9a23414f3b061d2a48a58292c3c2644ff6",
     "addons/playerbots/dashboard/js/view-corporations.js": "b02b33d6d2d11989326ba129d30d5e2f326509221b06a421ed5e161affb23e5a",
-    "addons/playerbots/dashboard/js/view-fleets.js": "2a3227b414e1f6b0f04e24207f72bf30dade51a0245115aa51b8e84a27013ed9",
+    "addons/playerbots/dashboard/js/view-fleets.js": "b3425524fc2478d36d5bb2c5bd66f279b60529d68e01d5a650717a1e0bddecde",
     "addons/playerbots/dashboard/js/view-guide.js": "0356feb437f422a0815943a603ff634910bff454223ed4700f3fb52e50024ca7",
     "addons/playerbots/dashboard/js/view-history.js": "ceacdf87226e90e28cae6f97eee8824561e8f59a48adb4ad645d10d9c0831069",
     "addons/playerbots/dashboard/js/view-performance.js": "1d43f9842e6a5436c5450a6371d322aa2c0e6c6a49bb83574a28fb4326de53ca",
-    "addons/playerbots/dashboard/js/view-settings.js": "e8bfc55cdf055dc5a2d297eb29fe76016accbee93ed9b96c8d838d39b66ac88b",
+    "addons/playerbots/dashboard/js/view-settings.js": "4b4ce7ef1b7bc91c559136bb8298e375a3822ca6097fbf8a6ae8be056585d976",
     "addons/playerbots/dashboard/js/view-world.js": "427330c0ca4b6a1864dc5f4a687dc842d7661290d4310af33413d969e635284a",
     "addons/playerbots/dashboard/styles.css": "cdc6584b039ecbe1e2b57a018db8f7d0d7f843874c28bad757d787ba57005c0e",
     "addons/playerbots/dashboard-server.js": "34e5167299cd8a4c9f87609969835bb103766799cc052f22879c656a623cd925",

@@ -582,6 +582,27 @@ in busy bots** stops the bots' own work so they join now. The FC's choices are
 saved per FC and apply to the next fleet they lead. Fleets do not survive a
 server restart, so form the fleet again after one.
 
+### Bot-led fleets
+
+Bot corporations also form fleets on their own. About once a minute, a bot
+already mining from a station or ratting (security patrol) in a system becomes
+fleet commander and brings in up to four corpmates: other miners working from
+the same station, and idle corpmates docked in that system with a ship for the
+job. The corpmates fly fleet duty behind the commander as above. The commander
+waits for its pilots before undocking (up to 2 minutes) or warping off (up to 1
+minute). Without a fleet hangar, full miners stay with the commander and unload
+into their own hangars when the fleet docks. A fleet breaks up when the
+commander's job ends, it is offline for 5 minutes, its pilots leave, or after
+about three hours. The dashboard shows these fleets read-only.
+
+| Setting | Default | Environment variable |
+| --- | --- | --- |
+| Bot fleets on/off | on | `EVEJS_PLAYER_BOTS_BOT_FLEETS=0` turns them off |
+| Bot fleets at once | 20 | `EVEJS_PLAYER_BOTS_MAX_BOT_FLEETS` (0 to 1,000) |
+| Pilots per bot fleet | 5 | `EVEJS_PLAYER_BOTS_BOT_FLEET_SIZE` (2 to 10) |
+
+No new bot fleets form while autonomous work is off.
+
 ### Fleets and corporations
 
 | Command | Use |

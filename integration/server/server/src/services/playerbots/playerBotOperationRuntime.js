@@ -1005,6 +1005,8 @@ async function advanceMining(operation, bot) {
     return { delayMs: STEP_DELAY_MS };
   }
   if (operation.stage === "undock") {
+    // A bot leading its own fleet waits for its pilots, as a person would.
+    if (fleetCommanderShouldWait(bot.characterID, "undock")) return { delayMs: STEP_DELAY_MS };
     if (Number((getCharacterRecord(bot.characterID) || {}).shipTypeID) === 670 || !getMiningModules(bot).length) {
       return block(operation, "blocked", "No mining ship is available (capsule or no fitted miner); the director must assign another ship.");
     }
@@ -1176,6 +1178,9 @@ async function advanceMining(operation, bot) {
     if (!state.inSpace || state.busy) return { delayMs: TRAVEL_DELAY_MS };
     const distance = state.distanceTo(operation.beltID);
     if (distance !== null && distance > DOCK_WARP_RANGE_METERS) {
+      // A bot leading its own fleet waits for its pilots, as a person would.
+      if (fleetCommanderShouldWait(bot.characterID, "warp")) return { delayMs: STEP_DELAY_MS };
+
       const result = space.warp(bot, operation.beltID);
       if (!result.success) return block(operation, "blocked", result.message);
       return { delayMs: TRAVEL_DELAY_MS };
@@ -6348,6 +6353,15 @@ function retireOperationForRemovedPilot(characterID, reason = "The pilot was rem
   record(operation, reason);
   saveOperation(operation);
   return true;
+}
+
+// Bot-led fleets (playerBotFleetCommandRuntime.js): a commander waits for its pilots.
+function fleetCommanderShouldWait(characterID, phase) {
+  try {
+    return require("./playerBotFleetCommandRuntime").commanderShouldWait(characterID, phase) === true;
+  } catch (_) {
+    return false;
+  }
 }
 
 module.exports = {

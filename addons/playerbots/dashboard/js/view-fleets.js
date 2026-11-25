@@ -4,7 +4,7 @@
 // warp and work the grid: mine, fight, haul or escort.
 
 import { getJSON, postJSON } from "./api.js";
-import { $, esc, num, toast, confirmDialog, pageHead, icon, emptyState, notice, portrait, stateTag, replaceKeepingFocus } from "./ui.js";
+import { $, esc, num, toast, confirmDialog, pageHead, icon, emptyState, notice, portrait, stateTag, replaceKeepingFocus, rel } from "./ui.js";
 import { openPilot } from "./drawer.js";
 
 const TYPE_ICONS = { mining: "ore", combat: "target", hauling: "cargo", escort: "shield" };
@@ -66,19 +66,29 @@ function dutyCell(member, fleet) {
   return `${stateTag("idle", "Off duty")}`;
 }
 
+// "mine (to-belt)" -> "Mining trip: to belt".
+function workLabel(text) {
+  const match = /^([a-z-]+) \(([^)]*)\)$/.exec(String(text || ""));
+  if (!match) return text || "Its own work";
+  const kinds = { mine: "Mining trip", combat: "Ratting", "fleet-duty": "Fleet duty" };
+  return `${kinds[match[1]] || match[1]}: ${match[2].replace(/-/g, " ")}`;
+}
+
 function memberRows(fleet) {
   const picked = chosenFor(fleet);
+  const readOnly = Boolean(fleet.botLed);
   return fleet.members.map((member) => {
     const tags = member.isCommander ? `<span class="pill good fleet-fc">${icon("flag", { size: 13 })}FC</span>` : member.isBot ? "" : `<span class="pill">Person</span>`;
-    const select = member.isBot
+    const select = member.isBot && !member.isCommander
       ? `<input type="checkbox" data-pick="${member.characterID}" aria-label="Choose ${esc(member.name)}"${picked.has(member.characterID) ? " checked" : ""}>`
       : "";
-    return `<tr class="${member.isBot ? "clickable" : ""}${picked.has(member.characterID) ? " selected" : ""}" ${member.isBot ? `data-pilot="${member.characterID}" tabindex="0"` : ""}>
-      <td class="select-cell">${select}</td>
+    const selected = !readOnly && picked.has(member.characterID);
+    return `<tr class="${member.isBot ? "clickable" : ""}${selected ? " selected" : ""}" ${member.isBot ? `data-pilot="${member.characterID}" tabindex="0"` : ""}>
+      ${readOnly ? "" : `<td class="select-cell">${select}</td>`}
       <td><div class="pilot">${portrait(member.characterID)}<span><strong>${esc(member.name)}</strong> ${tags}<span class="sub">${member.isBot ? esc(member.specialty || "bot") : "Human pilot"}</span></span></div></td>
       <td>${esc(member.shipTypeName || "—")}</td>
       <td>${where(member)}</td>
-      <td class="fleet-duty-cell">${member.isBot ? dutyCell(member, fleet) : `<span class="muted">${member.isCommander ? "Commands the fleet" : "—"}</span>`}</td>
+      <td class="fleet-duty-cell">${member.isCommander ? (readOnly ? `${stateTag("working", "Leading")}<span class="sub">${esc(workLabel(member.duty && member.duty.currentWork))}</span>` : `<span class="muted">Commands the fleet</span>`) : member.isBot ? dutyCell(member, fleet) : `<span class="muted">—</span>`}</td>
     </tr>`;
   }).join("");
 }
@@ -141,7 +151,29 @@ function dutyBar(fleet) {
   </div>`;
 }
 
+// A fleet the bots formed themselves: shown, never changed.
+function botFleetPanel(fleet) {
+  const commander = fleet.commander;
+  const place = commander.online
+    ? commander.docked ? `Docked at ${esc(commander.stationName || "a station")}` : `In space in ${esc(commander.systemName || "an unknown system")}`
+    : "Offline";
+  const type = data.fleetTypes.find((entry) => entry.key === fleet.doctrine.fleetType);
+  return `<div class="panel fleet-panel bot-fleet" data-fleet="${fleet.fleetID}">
+    <div class="panel-head fleet-head">
+      <div class="pilot fleet-commander">${portrait(commander.characterID)}<span><strong>${esc(commander.name)}</strong> <span class="pill good fleet-fc">${icon("flag", { size: 13 })}FC</span>
+        <span class="sub">${esc(fleet.name)} · ${place}${commander.shipTypeName ? ` · ${esc(commander.shipTypeName)}` : ""}</span></span></div>
+      <div class="fleet-head-side"><span class="pill">${icon(TYPE_ICONS[fleet.doctrine.fleetType] || "fleet", { size: 14 })}${esc(type ? type.label : "Fleet")}</span>${hangarHtml(commander)}<span class="pill">${icon("users", { size: 14 })}${num(fleet.botCount)} bots</span></div>
+    </div>
+    <div class="panel-body">${notice(`The bots formed this fleet themselves${fleet.formedAt ? ` ${esc(rel(fleet.formedAt))}` : ""}. Its commander does its own ${esc(type ? type.label.toLowerCase() : "")} work and its corpmates fly with it. You can watch it, but not change it; it breaks up when the commander's job ends.`, "info", "fleet-note")}</div>
+    <div class="table-wrap"><table class="fleet-members">
+      <thead><tr><th>Pilot</th><th>Ship</th><th>Where</th><th>Fleet duty</th></tr></thead>
+      <tbody id="fleet-members">${memberRows(fleet)}</tbody>
+    </table></div>
+  </div>`;
+}
+
 function fleetPanel(fleet) {
+  if (fleet.botLed) return botFleetPanel(fleet);
   const commander = fleet.commander;
   const place = commander.online
     ? commander.docked ? `Docked at ${esc(commander.stationName || "a station")}` : `In space in ${esc(commander.systemName || "an unknown system")}`
@@ -171,7 +203,7 @@ function fleetPanel(fleet) {
 
 function tabsHtml() {
   if (data.fleets.length < 2) return "";
-  return `<div class="tabs" role="tablist" aria-label="Fleets">${data.fleets.map((fleet) => `<button type="button" role="tab" data-tab="${fleet.fleetID}" class="${fleet.fleetID === activeFleet ? "active" : ""}" aria-selected="${fleet.fleetID === activeFleet}">${icon("fleet")}<span>${esc(fleet.commander.name)}</span><span class="tab-count">${num(fleet.botCount)}</span></button>`).join("")}</div>`;
+  return `<div class="tabs" role="tablist" aria-label="Fleets">${data.fleets.map((fleet) => `<button type="button" role="tab" data-tab="${fleet.fleetID}" class="${fleet.fleetID === activeFleet ? "active" : ""}" aria-selected="${fleet.fleetID === activeFleet}">${icon(fleet.botLed ? "cpu" : "fleet")}<span>${esc(fleet.botLed ? `${fleet.commander.name} (bots)` : fleet.commander.name)}</span><span class="tab-count">${num(fleet.botCount)}</span></button>`).join("")}</div>`;
 }
 
 function howTo() {
@@ -187,8 +219,10 @@ function howTo() {
 
 function pageHtml() {
   const fleet = data.fleets.find((entry) => entry.fleetID === activeFleet);
+  const people = data.fleets.filter((entry) => !entry.botLed).length;
+  const bots = data.fleets.length - people;
   const subtitle = data.fleets.length
-    ? `${num(data.fleets.length)} fleet${data.fleets.length === 1 ? "" : "s"} with bots. Tell the bots what kind of fleet it is; they fit up, stay with the FC and do the job.`
+    ? `${[people ? `${num(people)} fleet${people === 1 ? "" : "s"} led by people` : "", bots ? `${num(bots)} the bots formed themselves` : ""].filter(Boolean).join(", ")}. Tell the bots in your fleet what kind of fleet it is; they fit up, stay with the FC and do the job.`
     : "Fleets with bots in them appear here.";
   return `<div id="fleets-page">${pageHead("fleet", "Fleets", subtitle)}
     ${data.fleets.length ? `${tabsHtml()}<div id="fleet-body">${fleetPanel(fleet)}</div>` : `<div class="panel">${emptyState("fleet", "No fleets with bots yet", "Form a fleet in game and add bots to it.")}</div>${howTo()}`}</div>`;

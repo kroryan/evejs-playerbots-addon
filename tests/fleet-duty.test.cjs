@@ -28,11 +28,13 @@ function world(overrides = {}) {
     [BOT, { characterID: BOT, characterName: "Zara Vex", specialty: "mining", status: "active" }],
     [BOT2, { characterID: BOT2, characterName: "Ilo Kade", specialty: "security", status: "active" }],
   ]);
+  const fleets = new Map();
   const fleet = {
     fleetID: 77,
     advert: { fleetName: "Rock Party" },
     members: new Map([[FC, { charID: FC }], [BOT, { charID: BOT }], [BOT2, { charID: BOT2 }]]),
   };
+  fleets.set(77, fleet);
   const characters = new Map([
     [FC, { characterName: "Jess Commander", solarSystemID: SYSTEM, stationID: 0, shipID: FC_SHIP, shipTypeID: 28606, corporationID: 98000001 }],
     [BOT, { characterName: "Zara Vex", solarSystemID: SYSTEM, stationID: STATION, shipID: BOT_SHIP, shipTypeID: 32880 }],
@@ -77,10 +79,25 @@ function world(overrides = {}) {
 
   const services = {
     "../fleets/fleetRuntime": {
-      runtimeState: { fleets: new Map([[77, fleet]]) },
-      getBossCharacterID: () => FC,
-      getMemberFleetForCharacter: (id) => (fleet.members.has(Number(id)) ? fleet : null),
+      runtimeState: { fleets },
+      getBossCharacterID: (target) => (target && target.bossID) || FC,
+      getMemberFleetForCharacter: (id) => [...fleets.values()].find((entry) => entry.members.has(Number(id))) || null,
+      getFleetForCharacter: (id) => [...fleets.values()].find((entry) => entry.members.has(Number(id))) || null,
+      getFleetByID: (id) => fleets.get(Number(id)) || null,
+      createFleetRecord: (session) => {
+        const created = { fleetID: 500 + fleets.size, bossID: session.characterID, members: new Map([[session.characterID, { charID: session.characterID }]]) };
+        fleets.set(created.fleetID, created);
+        log("createFleet", session.characterID);
+        return created;
+      },
+      initFleet() {},
+      inviteCharacter: (session, fleetID, id) => { fleets.get(fleetID).members.set(id, { charID: id }); log("invite", id); },
+      kickMember: (session, fleetID, id) => { fleets.get(fleetID).members.delete(id); log("kick", id); },
+      disbandFleet: (session, fleetID) => { fleets.delete(fleetID); log("disband", fleetID); },
     },
+    "./playerBotConfigurationRuntime": { getSettings: () => ({ botFleetsEnabled: overrides.botFleets !== false, maxBotFleets: 5, botFleetSize: 5 }) },
+    "../corporation/corporationState": { getCorporationRecord: () => ({ tickerName: "ORE" }) },
+    "./playerBotIndustryCycleRuntime": { getCycle: () => null },
     "./playerBotRuntime": {
       hasBotProfile: (id) => bots.has(Number(id)),
       getBotByCharacterID: (id) => bots.get(Number(id)) || null,
@@ -89,7 +106,14 @@ function world(overrides = {}) {
     "./playerBotOperationRuntime": {
       getOperation: (id) => (operations.has(id) ? structuredClone(operations.get(id)) : null),
       listActiveOperations: () => [...operations.values()].filter((op) => ["active", "holding"].includes(op.status)),
-      stopOperation: (name) => { log("stopOperation", name); return { success: true }; },
+      listActiveOperationRecords: () => [...operations.values()].filter((op) => ["active", "holding"].includes(op.status)),
+      stopOperation: (name) => {
+        log("stopOperation", name);
+        const bot = [...bots.values()].find((entry) => entry.characterName === name);
+        const current = bot && operations.get(bot.characterID);
+        if (current && current.kind !== "fleet-duty") current.status = "stopped";
+        return { success: true };
+      },
       startFleetDuty: (name, commanderID, options) => { log("startFleetDuty", name, commanderID, options); return { success: true }; },
       startShipUpgrade: (name, role, options) => { log("startShipUpgrade", name, role, options); return { success: true, message: "buying" }; },
       startSavedFitting: (name, fittingID, requester, max, options) => { log("startSavedFitting", name, fittingID, requester.characterID, options); return { success: true, message: "fitting" }; },
@@ -121,6 +145,7 @@ function world(overrides = {}) {
       loadFromContainer: (bot, canID) => { log("loadFromContainer", canID); return { moved: 10 }; },
     },
     "./playerBotSpaceRuntime": {
+      isBotConnectedForWork: () => true,
       getSpaceState: () => (log("getSpaceState"), {
         ...state,
         distanceTo: (id) => {
@@ -129,7 +154,7 @@ function world(overrides = {}) {
           return Math.hypot(target.position.x - botEntity.position.x, target.position.y - botEntity.position.y, target.position.z - botEntity.position.z);
         },
       }),
-      getActorSession: () => botSession,
+      getActorSession: (who) => (!who || Number(who.characterID) === BOT ? botSession : { characterID: Number(who.characterID), shipID: 9_000 + Number(who.characterID) % 1000 }),
       getActorSpace: () => ({ scene, entity: botEntity, session: botSession }),
       undock: () => { log("undock"); return { success: true }; },
       warp: (bot, id) => { log("warp", id); return { success: true }; },
@@ -160,9 +185,9 @@ function world(overrides = {}) {
     },
     "../../space/worldData": {
       getSolarSystemByID: () => ({ solarSystemName: "Jita" }),
-      getStationByID: () => ({ stationName: "Jita IV - Moon 4" }),
+      getStationByID: () => ({ stationName: "Jita IV - Moon 4", solarSystemID: SYSTEM }),
     },
-    "../../utils/logger": { warn: (message) => log("warn", message), info() {} },
+    "../../utils/logger": { warn: (message) => log("warn", message), info: (message) => log("info", message) },
     "../ship/shipServiceAccess": {
       normalizeShipConfiguration: (config) => ({ FleetHangar_AllowFleetAccess: config.FleetHangar_AllowFleetAccess === true }),
     },
@@ -229,7 +254,7 @@ function world(overrides = {}) {
   });
   const bot = bots.get(BOT);
   return {
-    runtime, calls, rows, bots, fleet, characters, fcSession, botSession, operations, items, fcEntity, botEntity, rat,
+    runtime, calls, rows, bots, fleet, fleets, characters, fcSession, botSession, operations, items, fcEntity, botEntity, rat,
     dynamicEntities, visible, locked, state, fleetHangarItems, kit, duty, bot, scene,
     setFleetAccess(value) { fleetAccess = value; },
     // Values made inside the sandbox have its own Array and Object; copy
@@ -550,6 +575,92 @@ test("the overview lists the fleet, its FC, the fleet hangar and each bot's duty
   w.operations.set(BOT2, { operationID: "OPU", kind: "upgrade", stage: "buy", status: "active", characterID: BOT2, fleetDutyCommanderID: FC });
   const ilo = plain(w.runtime.getOverview()).fleets[0].members.find((member) => member.characterID === BOT2);
   assert.equal(ilo.duty.refitting, true);
+});
+
+test("bots on the same mining job form their own fleet, which people cannot change", async () => {
+  const w = world({ botFleets: true });
+  w.fleets.clear();
+  for (const id of [BOT, BOT2]) w.bots.get(id).corporationID = 98000002;
+  w.operations.set(BOT, { operationID: "M1", kind: "mine", stage: "mining", status: "active", autonomous: true, characterID: BOT, corporationID: 98000002, homeStationID: STATION, createdAt: "2026-11-25T10:00:00Z" });
+  w.operations.set(BOT2, { operationID: "M2", kind: "mine", stage: "to-belt", status: "active", autonomous: true, characterID: BOT2, corporationID: 98000002, homeStationID: STATION, createdAt: "2026-11-25T10:05:00Z" });
+  w.runtime.reconcile();
+  const created = w.names("createFleet");
+  assert.equal(created.length, 1);
+  const commanderID = created[0][1];
+  const memberID = commanderID === BOT ? BOT2 : BOT;
+  assert.deepEqual(w.names("invite").map((call) => call[1]), [memberID]);
+  assert.deepEqual(w.names("stopOperation").map((call) => call[1]), [w.bots.get(memberID).characterName], "the member drops its own mining trip");
+  assert.equal(w.runtime.isEnrolled(memberID), true);
+  assert.equal(w.runtime.isEnrolled(commanderID), false, "the commander keeps its own job");
+
+  const overview = plain(w.runtime.getOverview());
+  assert.equal(overview.fleets.length, 1);
+  assert.equal(overview.fleets[0].botLed, true);
+  assert.match(overview.fleets[0].name, /\[ORE\] .*'s mining fleet/);
+  assert.match(w.runtime.runCommand({ commanderID, action: "stop" }).message, /Bots cannot command/);
+
+  // The commander waits to undock until its pilot is docked with it.
+  w.operations.set(memberID, w.duty({ characterID: memberID, commanderID }));
+  w.characters.get(commanderID).stationID = STATION;
+  w.characters.get(memberID).stationID = 0;
+  assert.equal(w.runtime.commanderShouldWait(commanderID, "undock"), true);
+  w.characters.get(memberID).stationID = STATION;
+  assert.equal(w.runtime.commanderShouldWait(commanderID, "undock"), false);
+  assert.equal(w.runtime.commanderShouldWait(FC, "undock"), false, "people's fleets never hold anyone");
+
+  // The commander's job ends: two minutes later the fleet breaks up.
+  w.operations.get(commanderID).status = "completed";
+  w.runtime.reconcile();
+  assert.equal(w.names("disband").length, 0);
+  for (const entry of w.runtime._testing.botFleets.values()) entry.workMissingSinceMs = Date.now() - 3 * 60 * 1000;
+  w.runtime.reconcile();
+  assert.equal(w.names("disband").length, 1);
+  assert.equal(w.runtime.isEnrolled(memberID), false);
+});
+
+test("a ratting bot forms a combat fleet with an idle corpmate docked in its system", () => {
+  const w = world({ roleFits: ["security"] });
+  w.fleets.clear();
+  for (const id of [BOT, BOT2]) w.bots.get(id).corporationID = 98000002;
+  w.operations.set(BOT2, { operationID: "C1", kind: "combat", mode: "security", stage: "to-home", status: "active", autonomous: true, characterID: BOT2, corporationID: 98000002, targetSystemID: SYSTEM });
+  w.runtime.reconcile();
+  assert.deepEqual(w.names("createFleet").map((call) => call[1]), [BOT2]);
+  assert.deepEqual(w.names("invite").map((call) => call[1]), [BOT], "the idle pilot docked in the system joins");
+  assert.equal(w.names("stopOperation").length, 0, "nobody's own work had to stop");
+  const [fleet] = plain(w.runtime.getOverview()).fleets;
+  assert.equal(fleet.doctrine.fleetType, "combat");
+  assert.equal(fleet.botLed, true);
+});
+
+test("bot fleets stay off when the setting is off, and a lone miner forms none", () => {
+  const off = world({ botFleets: false });
+  off.fleets.clear();
+  off.operations.set(BOT, { operationID: "M1", kind: "mine", stage: "mining", status: "active", autonomous: true, characterID: BOT, corporationID: 98000002, homeStationID: STATION });
+  off.operations.set(BOT2, { operationID: "M2", kind: "mine", stage: "mining", status: "active", autonomous: true, characterID: BOT2, corporationID: 98000002, homeStationID: STATION });
+  off.runtime.reconcile();
+  assert.equal(off.names("createFleet").length, 0);
+
+  const lone = world();
+  lone.fleets.clear();
+  lone.operations.set(BOT, { operationID: "M1", kind: "mine", stage: "mining", status: "active", autonomous: true, characterID: BOT, corporationID: 98000002, homeStationID: STATION });
+  lone.bots.get(BOT2).status = "paused";
+  lone.runtime.reconcile();
+  assert.equal(lone.names("createFleet").length, 0);
+});
+
+test("in a bot fleet a full miner waits for the commander instead of jettisoning", async () => {
+  const w = world({ cargo: { capacity: 5_000, used: 4_800, free: 200 } });
+  enableDuty(w, "mining");
+  w.bots.set(FC, { characterID: FC, characterName: "Bot Boss", status: "active" });
+  w.runtime._testing.botFleets.set(77, { fleetID: 77, commanderID: FC, fleetType: "mining", name: "Bot Boss's mining fleet", formedAtMs: Date.now() });
+  w.characters.get(BOT).stationID = 0;
+  w.state.inSpace = true;
+  w.botEntity.position = { x: 1_500, y: 0, z: 0 };
+  w.setFleetAccess(false);
+  w.items.push({ itemID: 51, ownerID: BOT, locationID: BOT_SHIP, flagID: 134, typeID: 1230, stacksize: 1_000 });
+  const step = await w.step();
+  assert.equal(w.names("jettison").length, 0);
+  assert.equal(step.operation.stage, "unloading");
 });
 
 test("the add-on API and the dashboard server pass fleet orders through", async (t) => {

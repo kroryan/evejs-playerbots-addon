@@ -60,6 +60,10 @@ function defaults() {
     addonBotDelayMs: envInteger("EVEJS_PLAYER_BOTS_ADDON_BOT_DELAY_MS", 0, 0, 5_000),
     addonRequestTimeoutMs: envInteger("EVEJS_PLAYER_BOTS_ADDON_REQUEST_TIMEOUT_MS", 120_000, 10_000, 10 * 60 * 1000),
     autoworkEnabled: process.env.EVEJS_PLAYER_BOTS_AUTOWORK !== "0",
+    // Bot corporations form their own mining and combat fleets.
+    botFleetsEnabled: process.env.EVEJS_PLAYER_BOTS_BOT_FLEETS !== "0",
+    maxBotFleets: envInteger("EVEJS_PLAYER_BOTS_MAX_BOT_FLEETS", 20, 0, 1_000),
+    botFleetSize: envInteger("EVEJS_PLAYER_BOTS_BOT_FLEET_SIZE", 5, 2, 10),
   };
 }
 
@@ -85,6 +89,8 @@ const BOUNDS = Object.freeze({
   addonCycleIntervalMs: [30_000, 24 * 60 * 60 * 1000],
   addonBotDelayMs: [0, 5_000],
   addonRequestTimeoutMs: [10_000, 10 * 60 * 1000],
+  maxBotFleets: [0, 1_000],
+  botFleetSize: [2, 10],
 });
 
 function readStored() {
@@ -103,6 +109,7 @@ function getSettings() {
   }
   if (typeof stored.autoworkEnabled === "boolean") settings.autoworkEnabled = stored.autoworkEnabled;
   if (typeof stored.rosterSeedEnabled === "boolean") settings.rosterSeedEnabled = stored.rosterSeedEnabled;
+  if (typeof stored.botFleetsEnabled === "boolean") settings.botFleetsEnabled = stored.botFleetsEnabled;
   const locked = launcherOverrides();
   Object.assign(settings, locked);
   settings.launcherManagedFields = Object.keys(locked);
@@ -135,7 +142,7 @@ function updateSettings(patch = {}) {
   if (!patch || typeof patch !== "object" || Array.isArray(patch)) {
     return { success: false, message: "Settings must be sent as a JSON object." };
   }
-  const booleanSettings = new Set(["autoworkEnabled", "rosterSeedEnabled"]);
+  const booleanSettings = new Set(["autoworkEnabled", "rosterSeedEnabled", "botFleetsEnabled"]);
   const unknown = Object.keys(patch).filter((key) => !Object.hasOwn(BOUNDS, key) && !booleanSettings.has(key));
   if (unknown.length) return { success: false, message: `Unknown playerbot settings: ${unknown.join(", ")}.` };
   const next = { ...getSettings() };

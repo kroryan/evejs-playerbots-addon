@@ -163,6 +163,8 @@ function loadDoctrines() {
 function saveDoctrine(doctrine) {
   doctrine.updatedAt = new Date().toISOString();
   doctrines.set(doctrine.commanderID, doctrine);
+  // Fleets the bots formed live only as long as the fleet; never stored.
+  if (doctrine.autonomous) return doctrine;
   const repo = getRepo();
   const result = repo.write(TABLE, `/${DOCTRINE_PREFIX}${doctrine.commanderID}`, {
     playerBotFleetDoctrine: { ...doctrine, fits: { ...doctrine.fits }, botIDs: doctrine.botIDs ? [...doctrine.botIDs] : null },
@@ -206,10 +208,25 @@ function memberIDs(fleet) {
 // who joined. Bots never command a fleet.
 function commanderOfFleet(fleet) {
   if (!fleet) return 0;
-  const fleetRuntime = deps.fleetRuntime();
-  const bossID = positive(typeof fleetRuntime.getBossCharacterID === "function" ? fleetRuntime.getBossCharacterID(fleet) : 0);
+  const bossID = bossOf(fleet);
   if (bossID && !isBotID(bossID)) return bossID;
-  return memberIDs(fleet).find((id) => !isBotID(id)) || 0;
+  const person = memberIDs(fleet).find((id) => !isBotID(id));
+  if (person) return person;
+  // A fleet the bots formed themselves is led by the bot that formed it.
+  const entry = botFleets.get(Number(fleet.fleetID));
+  return entry && fleet.members.has(entry.commanderID) ? entry.commanderID : 0;
+}
+
+// The fleet's boss: the member holding the creator job (the engine does not
+// export its own lookup).
+function bossOf(fleet) {
+  const fleetRuntime = deps.fleetRuntime();
+  if (typeof fleetRuntime.getBossCharacterID === "function") return positive(fleetRuntime.getBossCharacterID(fleet));
+  const creatorJob = Number(fleetRuntime.FLEET && fleetRuntime.FLEET.FLEET_JOB_CREATOR) || 0;
+  for (const member of fleet && fleet.members ? fleet.members.values() : []) {
+    if (creatorJob && (Number(member && member.job) & creatorJob) !== 0) return positive(member.charID);
+  }
+  return positive(fleet && fleet.creatorCharID);
 }
 
 function fleetOfCommander(commanderID) {
@@ -218,7 +235,7 @@ function fleetOfCommander(commanderID) {
 }
 
 function selectedBots(doctrine, fleet) {
-  const bots = memberIDs(fleet).filter(isBotID);
+  const bots = memberIDs(fleet).filter((id) => id !== doctrine.commanderID && isBotID(id));
   if (!doctrine.botIDs) return bots;
   const chosen = new Set(doctrine.botIDs);
   return bots.filter((id) => chosen.has(id));
@@ -229,19 +246,27 @@ function readCommander(commanderID) {
   const session = id ? deps.sessionRegistry().findSessionByCharacterID(id) : null;
   if (!session) return { online: false, characterID: id };
   const character = deps.characters().getCharacterRecord(id) || {};
-  const stationID = positive(session.stationID || session.stationid || session.structureID || session.structureid);
-  const systemID = positive(session.solarsystemid2 || session.solarsystemid || session.solarSystemID || character.solarSystemID);
+  const isBot = isBotID(id);
+  // A bot's character record is kept current by its own pilot; a person's
+  // session is.
+  const stationID = isBot
+    ? positive(character.stationID || character.structureID)
+    : positive(session.stationID || session.stationid || session.structureID || session.structureid);
+  const systemID = isBot
+    ? positive(character.solarSystemID || session.solarsystemid2 || session.solarsystemid)
+    : positive(session.solarsystemid2 || session.solarsystemid || session.solarSystemID || character.solarSystemID);
   const shipID = positive(session.shipID || session.shipid || character.shipID);
   const shipTypeID = positive(session.shipTypeID || session.shiptypeid || character.shipTypeID);
   return {
     online: true,
     characterID: id,
+    isBot,
     session,
     stationID,
     systemID,
     shipID,
     shipTypeID,
-    inSpace: !stationID && Boolean(session._space),
+    inSpace: !stationID && (isBot || Boolean(session._space)),
   };
 }
 
@@ -397,14 +422,335 @@ function recentThreat(characterID) {
 // Bots on fleet duty, for the connection plan: they stay online with their FC.
 function enrolledIDs() {
   loadDoctrines();
-  if (!timer && [...doctrines.values()].some((doctrine) => doctrine.active)) ensureTimer();
+  if (!timer && ([...doctrines.values()].some((doctrine) => doctrine.active) || botFleetSettings().enabled)) ensureTimer();
   return [...enrolled.keys()];
 }
 
 function isEnrolled(characterID) {
   loadDoctrines();
-  if (!timer && [...doctrines.values()].some((doctrine) => doctrine.active)) ensureTimer();
+  if (!timer && ([...doctrines.values()].some((doctrine) => doctrine.active) || botFleetSettings().enabled)) ensureTimer();
   return enrolled.has(positive(characterID));
+}
+
+// -------------------------------------------------------- bot-led fleets
+//
+// Like corporations of real players, bot corporations fly together. Every
+// minute or so, a bot already mining or ratting for its corporation becomes
+// a fleet commander and pulls in corpmates working the same patch: other
+// miners from the same station, or combat pilots in the same system. The
+// corpmates then fly fleet duty behind it exactly as they would for a
+// person. These fleets belong to the bots: the dashboard shows them but
+// cannot change them, and they break up when the commander's job ends.
+
+const BOT_FLEET_FORM_MS = 60_000;
+const BOT_FLEET_IDLE_END_MS = 2 * 60 * 1000;
+const BOT_FLEET_OFFLINE_END_MS = 5 * 60 * 1000;
+const BOT_FLEET_MAX_AGE_MS = 3 * 60 * 60 * 1000;
+const BOT_FLEET_COMMANDER_WORK = Object.freeze({ mining: "mine", combat: "combat" });
+const MINING_STAGES_TO_JOIN = new Set(["to-home", "undock", "to-belt", "mining"]);
+const COMBAT_STAGES_TO_JOIN = new Set(["to-home", "to-system", "undock"]);
+const botFleets = new Map(); // fleetID -> { fleetID, commanderID, fleetType, name, corporationID, formedAtMs, ... }
+let lastBotFleetFormAtMs = 0;
+
+function botFleetSettings() {
+  try {
+    const settings = require("./playerBotConfigurationRuntime").getSettings();
+    return {
+      enabled: settings.botFleetsEnabled !== false,
+      // New bot fleets are autonomous work: none form while it is switched off.
+      autowork: settings.autoworkEnabled !== false,
+      maxFleets: Math.max(0, Math.trunc(Number(settings.maxBotFleets ?? 20))),
+      size: Math.max(2, Math.trunc(Number(settings.botFleetSize ?? 5))),
+    };
+  } catch {
+    return { enabled: false, maxFleets: 0, size: 2 };
+  }
+}
+
+function botFleetForCommander(commanderID) {
+  for (const entry of botFleets.values()) if (entry.commanderID === positive(commanderID)) return entry;
+  return null;
+}
+
+function isConnected(characterID) {
+  try {
+    return deps.space().isBotConnectedForWork(positive(characterID));
+  } catch {
+    return false;
+  }
+}
+
+function availableForFleet(bot) {
+  const id = positive(bot && bot.characterID);
+  if (!id || bot.status === "paused" || bot.autonomyPaused === true) return false;
+  if (enrolled.has(id) || botFleetForCommander(id)) return false;
+  if (deps.fleetRuntime().getFleetForCharacter(id)) return false;
+  return isConnected(id);
+}
+
+function corpTicker(corporationID) {
+  try {
+    const corporation = require("../corporation/corporationState").getCorporationRecord(positive(corporationID));
+    return String(corporation && (corporation.tickerName || corporation.ticker) || "").slice(0, 8);
+  } catch {
+    return "";
+  }
+}
+
+// A bot with no job, docked in that system and flying a ship for this work.
+function idleRecruits(fleetType, corporationID, systemID, taken) {
+  const operations = deps.operations();
+  const cycles = (() => { try { return require("./playerBotIndustryCycleRuntime"); } catch { return null; } })();
+  const result = [];
+  for (const bot of deps.playerBots().listBots()) {
+    const id = positive(bot.characterID);
+    if (taken.has(id) || positive(bot.corporationID) !== positive(corporationID) || !availableForFleet(bot)) continue;
+    const character = deps.characters().getCharacterRecord(id) || {};
+    if (positive(character.solarSystemID) !== positive(systemID) || !positive(character.stationID || character.structureID)) continue;
+    const current = operations.getOperation(id);
+    if (current && (["active", "holding", "review"].includes(current.status) || current.pending)) continue;
+    const cycle = cycles && cycles.getCycle ? cycles.getCycle(id) : null;
+    if (cycle && (["active", "holding"].includes(cycle.status) || cycle.pending)) continue;
+    if (!shipFitsJob(bot, fleetType).ok) continue;
+    result.push({ bot, stop: false });
+  }
+  return result;
+}
+
+function formBotFleets() {
+  const settings = botFleetSettings();
+  if (!settings.enabled || !settings.autowork || botFleets.size >= settings.maxFleets) return;
+  const operations = deps.operations();
+  const active = typeof operations.listActiveOperationRecords === "function"
+    ? operations.listActiveOperationRecords()
+    : operations.listActiveOperations();
+  const taken = new Set();
+  const groups = new Map();
+  for (const operation of active) {
+    if (!operation || operation.userDirected === true || operation.status !== "active") continue;
+    let fleetType = "";
+    let place = 0;
+    if (operation.kind === "mine" && MINING_STAGES_TO_JOIN.has(operation.stage)) {
+      fleetType = "mining";
+      place = positive(operation.homeStationID);
+    } else if (operation.kind === "combat" && operation.mode === "security" && !operation.miningEscortForCharacterID &&
+        !operation.defensiveTargetID && COMBAT_STAGES_TO_JOIN.has(operation.stage)) {
+      fleetType = "combat";
+      place = positive(operation.targetSystemID);
+    }
+    if (!fleetType || !place || !positive(operation.corporationID)) continue;
+    const bot = getBot(operation.characterID);
+    if (!bot || !availableForFleet(bot)) continue;
+    const key = `${fleetType}:${positive(operation.corporationID)}:${place}`;
+    if (!groups.has(key)) groups.set(key, { fleetType, corporationID: positive(operation.corporationID), place, pilots: [] });
+    groups.get(key).pilots.push({ bot, operation });
+  }
+  for (const group of groups.values()) {
+    if (botFleets.size >= settings.maxFleets) break;
+    // The pilot with the biggest hold leads a mining fleet; the longest at
+    // work leads a combat fleet.
+    const ranked = group.pilots.slice().sort((left, right) => group.fleetType === "mining"
+      ? commanderScore(right.bot) - commanderScore(left.bot)
+      : (Date.parse(left.operation.createdAt || "") || 0) - (Date.parse(right.operation.createdAt || "") || 0));
+    const leader = ranked[0];
+    const commanderCharacter = deps.characters().getCharacterRecord(leader.bot.characterID) || {};
+    const systemID = group.fleetType === "mining"
+      ? positive(deps.worldData().getStationByID(group.place)?.solarSystemID) || positive(commanderCharacter.solarSystemID)
+      : group.place;
+    taken.add(positive(leader.bot.characterID));
+    const recruits = ranked.slice(1).map((entry) => ({ bot: entry.bot, stop: true }));
+    for (const entry of recruits) taken.add(positive(entry.bot.characterID));
+    recruits.push(...idleRecruits(group.fleetType, group.corporationID, systemID, taken));
+    const chosen = recruits.slice(0, settings.size - 1);
+    if (!chosen.length) continue;
+    for (const entry of chosen) taken.add(positive(entry.bot.characterID));
+    formBotFleet(group, leader.bot, chosen);
+  }
+}
+
+function commanderScore(bot) {
+  const character = deps.characters().getCharacterRecord(bot.characterID) || {};
+  const typeID = positive(character.shipTypeID);
+  const fitting = deps.fitting();
+  return (Number(fitting.getTypeAttributeValue(typeID, "fleetHangarCapacity")) || 0) * 10 +
+    (Number(fitting.getTypeAttributeValue(typeID, "generalMiningHoldCapacity", "specialOreHoldCapacity")) || 0);
+}
+
+function formBotFleet(group, leader, recruits) {
+  const fleetRuntime = deps.fleetRuntime();
+  const session = deps.space().getActorSession(leader);
+  let fleet;
+  try {
+    const record = fleetRuntime.createFleetRecord(session);
+    fleetRuntime.initFleet(session, record.fleetID, { shipTypeID: positive(session.shipTypeID) || null });
+    fleet = fleetRuntime.getFleetByID(record.fleetID);
+  } catch (error) {
+    warn(`${leader.characterName} could not form a fleet: ${error.message}`);
+    return null;
+  }
+  const fleetID = Number(fleet.fleetID);
+  const ticker = corpTicker(group.corporationID);
+  const entry = {
+    fleetID,
+    commanderID: positive(leader.characterID),
+    commanderName: String(leader.characterName || ""),
+    fleetType: group.fleetType,
+    name: `${ticker ? `[${ticker}] ` : ""}${leader.characterName}'s ${group.fleetType} fleet`,
+    corporationID: group.corporationID,
+    formedAtMs: Date.now(),
+    workMissingSinceMs: 0,
+    offlineSinceMs: 0,
+  };
+  // Mark it before anyone joins, so the engine does not break up a fleet
+  // with no person in it the moment it forms.
+  botFleets.set(fleetID, entry);
+  fleet.playerBotOwned = true;
+  // A commander flying an Orca or Porpoise opens its fleet hangar to the fleet.
+  if (group.fleetType === "mining" && fleetHangarInfo(session.shipID, session.shipTypeID).capacity > 0) {
+    try {
+      new (require("../ship/shipService"))().Handle_ConfigureShip([{ FleetHangar_AllowFleetAccess: true }], session, null);
+    } catch (error) {
+      warn(`${leader.characterName} could not open its fleet hangar: ${error.message}`);
+    }
+  }
+  const joined = [];
+  for (const { bot, stop } of recruits) {
+    try {
+      fleetRuntime.inviteCharacter(session, fleetID, positive(bot.characterID), null, null, null, { autoAccept: true });
+      if (!fleet.members.has(positive(bot.characterID))) continue;
+      joined.push(positive(bot.characterID));
+      if (stop) deps.operations().stopOperation(bot.characterName);
+    } catch (error) {
+      warn(`${bot.characterName} could not join ${entry.name}: ${error.message}`);
+    }
+  }
+  if (!joined.length) {
+    disbandBotFleet(entry, "nobody joined");
+    return null;
+  }
+  doctrines.set(entry.commanderID, {
+    commanderID: entry.commanderID,
+    fleetType: group.fleetType,
+    fits: blankFits(),
+    active: true,
+    autonomous: true,
+    botIDs: null,
+    updatedAt: new Date().toISOString(),
+  });
+  for (const id of joined) {
+    const state = memberState(id);
+    state.refitAttempts = 0;
+    state.lastStartAtMs = 0;
+    enrolled.set(id, entry.commanderID);
+  }
+  deps.logger().info(`[PlayerBots] ${entry.name} formed with ${joined.length} pilot(s) in fleet ${fleetID}.`);
+  return entry;
+}
+
+function disbandBotFleet(entry, reason) {
+  botFleets.delete(entry.fleetID);
+  const doctrine = doctrines.get(entry.commanderID);
+  if (doctrine && doctrine.autonomous) doctrines.delete(entry.commanderID);
+  const fleetRuntime = deps.fleetRuntime();
+  const fleet = fleetRuntime.getFleetByID(entry.fleetID);
+  if (fleet) {
+    const members = memberIDs(fleet);
+    try {
+      const session = deps.space().getActorSession(getBot(entry.commanderID) || { characterID: entry.commanderID });
+      fleetRuntime.disbandFleet(session, entry.fleetID);
+    } catch (error) {
+      warn(`could not disband ${entry.name}: ${error.message}`);
+    }
+    for (const id of members) {
+      if (id !== entry.commanderID) wake(id);
+    }
+  }
+  try { deps.logger().info(`[PlayerBots] ${entry.name} broke up: ${reason}.`); } catch { /* logging only */ }
+}
+
+// Ends bot fleets whose commander stopped the job, went offline, lost its
+// pilots or has flown long enough, then forms new ones.
+function maintainBotFleets() {
+  const now = Date.now();
+  const fleetRuntime = deps.fleetRuntime();
+  const operations = deps.operations();
+  for (const entry of [...botFleets.values()]) {
+    const fleet = fleetRuntime.getFleetByID(entry.fleetID);
+    if (!fleet || !fleet.members || !fleet.members.has(entry.commanderID)) {
+      botFleets.delete(entry.fleetID);
+      if (doctrines.get(entry.commanderID)?.autonomous) doctrines.delete(entry.commanderID);
+      continue;
+    }
+    if (memberIDs(fleet).length < 2) {
+      disbandBotFleet(entry, "no pilots left");
+      continue;
+    }
+    if (memberIDs(fleet).some((id) => !isBotID(id))) {
+      // A person joined: it is a person's fleet from now on.
+      botFleets.delete(entry.fleetID);
+      fleet.playerBotOwned = false;
+      if (doctrines.get(entry.commanderID)?.autonomous) doctrines.delete(entry.commanderID);
+      continue;
+    }
+    const work = operations.getOperation(entry.commanderID);
+    const working = work && work.kind === BOT_FLEET_COMMANDER_WORK[entry.fleetType] && ["active", "holding"].includes(work.status);
+    entry.workMissingSinceMs = working ? 0 : entry.workMissingSinceMs || now;
+    const online = isConnected(entry.commanderID);
+    entry.offlineSinceMs = online ? 0 : entry.offlineSinceMs || now;
+    if (entry.workMissingSinceMs && now - entry.workMissingSinceMs > BOT_FLEET_IDLE_END_MS) {
+      disbandBotFleet(entry, "the commander's job ended");
+    } else if (entry.offlineSinceMs && now - entry.offlineSinceMs > BOT_FLEET_OFFLINE_END_MS) {
+      disbandBotFleet(entry, "the commander went offline");
+    } else if (now - entry.formedAtMs > BOT_FLEET_MAX_AGE_MS && (!work || work.stage === "to-home" || work.stage === "unload")) {
+      disbandBotFleet(entry, "the fleet has flown for three hours");
+    }
+  }
+  if (now - lastBotFleetFormAtMs >= BOT_FLEET_FORM_MS) {
+    lastBotFleetFormAtMs = now;
+    formBotFleets();
+  }
+}
+
+// A bot commander about to undock or warp off waits a short while for its
+// pilots: until they are docked with it, or undocked in its system. It does
+// not wait twice for the same move.
+const COMMANDER_WAIT_MS = Object.freeze({ undock: 2 * 60 * 1000, warp: 60 * 1000 });
+function commanderShouldWait(commanderID, phase) {
+  const entry = botFleetForCommander(commanderID);
+  if (!entry || !COMMANDER_WAIT_MS[phase]) return false;
+  const fleet = deps.fleetRuntime().getFleetByID(entry.fleetID);
+  if (!fleet) return false;
+  const commander = deps.characters().getCharacterRecord(positive(commanderID)) || {};
+  const commanderStationID = positive(commander.stationID || commander.structureID);
+  const commanderSystemID = positive(commander.solarSystemID);
+  const operations = deps.operations();
+  const pending = memberIDs(fleet).filter((id) => {
+    if (id === positive(commanderID)) return false;
+    const duty = operations.getOperation(id);
+    if (!duty || duty.kind !== "fleet-duty" || !["active", "holding"].includes(duty.status) || duty.withdrawing) return false;
+    const pilot = deps.characters().getCharacterRecord(id) || {};
+    const pilotStationID = positive(pilot.stationID || pilot.structureID);
+    return phase === "undock"
+      ? !commanderStationID || pilotStationID !== commanderStationID
+      : positive(pilot.solarSystemID) !== commanderSystemID || pilotStationID > 0;
+  });
+  const now = Date.now();
+  if (!pending.length) {
+    entry.waiting = null;
+    return false;
+  }
+  if (!entry.waiting || entry.waiting.phase !== phase) entry.waiting = { phase, sinceMs: now };
+  return now - entry.waiting.sinceMs <= COMMANDER_WAIT_MS[phase];
+}
+
+function leaveBotFleet(entry, characterID, reason) {
+  try {
+    const session = deps.space().getActorSession(getBot(entry.commanderID) || { characterID: entry.commanderID });
+    deps.fleetRuntime().kickMember(session, entry.fleetID, positive(characterID));
+  } catch (error) {
+    warn(`could not release ${characterID} from ${entry.name}: ${error.message}`);
+  }
+  memberState(characterID).note = reason;
 }
 
 // ------------------------------------------------------------ reconcile tick
@@ -429,6 +775,11 @@ function reconcile() {
   reconciling = true;
   try {
     loadDoctrines();
+    try {
+      maintainBotFleets();
+    } catch (error) {
+      warn(`bot fleet upkeep failed: ${error.stack || error.message}`);
+    }
     const next = new Map();
     let anyActive = false;
     for (const doctrine of doctrines.values()) {
@@ -447,7 +798,7 @@ function reconcile() {
         warn(`char=${botID}: ${error.message}`);
       }
     }
-    if (!anyActive) stopTimer();
+    if (!anyActive && !botFleetSettings().enabled) stopTimer();
   } catch (error) {
     warn(`reconcile failed: ${error.stack || error.message}`);
   } finally {
@@ -537,6 +888,13 @@ function reconcileBot(botID, doctrine) {
   state.lastStartAtMs = now;
 
   let fitWaived = "";
+  if (doctrine.autonomous && current && current.kind === "fleet-duty" && current.status === "completed" &&
+      current.refitNeeded && positive(current.commanderID) === doctrine.commanderID) {
+    // In a bot fleet a pilot without the right ship simply leaves it.
+    const entry = botFleetForCommander(doctrine.commanderID);
+    if (entry) leaveBotFleet(entry, botID, "Left the bot fleet: no ship for the job.");
+    return;
+  }
   if (current && current.kind === "fleet-duty" && current.status === "completed" && current.refitNeeded &&
       positive(current.commanderID) === doctrine.commanderID &&
       state.refitForOperationID !== String(current.operationID || "")) {
@@ -977,6 +1335,20 @@ function handOverWhileDocked(operation, bot, commander, kit) {
   if (result.moved) {
     kit.record(operation, `Put ${result.moved.toLocaleString("en-US")} unit(s) into the FC's fleet hangar.`);
     kit.save(operation);
+    return;
+  }
+  // No fleet hangar to fill: empty the hold into the pilot's own hangar here,
+  // ready for the next trip.
+  try {
+    const unloaded = deps.inventory().unloadCargo(bot);
+    const units = Object.values(unloaded && unloaded.unloaded || {}).reduce((total, value) => total + (Number(value) || 0), 0);
+    if (units > 0) {
+      if (operation.unloading) delete operation.unloading;
+      kit.record(operation, `Unloaded ${units.toLocaleString("en-US")} unit(s) into its own hangar while docked with the FC.`);
+      kit.save(operation);
+    }
+  } catch (error) {
+    warn(`char=${bot.characterID} could not unload while docked: ${error.message}`);
   }
 }
 
@@ -1110,6 +1482,12 @@ function unloadOre(context, cargo) {
     kit.record(operation, `Unloaded ${delivered.moved.toLocaleString("en-US")} unit(s) of ore into the FC's fleet hangar.`);
     kit.save(operation);
     return { delayMs: 1_000 };
+  }
+  if (commander.isBot) {
+    // Bot fleets carry their ore home together when the commander docks.
+    keepNear(bot, attached, commander.shipID, FOLLOW_RANGE.mining);
+    setStage(operation, "unloading", "Hold full; staying with the commander until the fleet docks to unload.", kit);
+    return { delayMs: STEP_MS * 2 };
   }
   const why = {
     "no-hangar": "the FC's ship has no fleet hangar",
@@ -1604,9 +1982,12 @@ function getOverview(options = {}) {
       }
       return row;
     });
+    const botFleet = botFleets.get(Number(fleet.fleetID)) || null;
     fleets.push({
       fleetID: Number(fleet.fleetID) || 0,
-      name: String(fleet.advert && fleet.advert.fleetName || `Fleet ${fleet.fleetID}`),
+      name: String(botFleet ? botFleet.name : fleet.advert && fleet.advert.fleetName || `Fleet ${fleet.fleetID}`),
+      botLed: Boolean(botFleet),
+      formedAt: botFleet ? new Date(botFleet.formedAtMs).toISOString() : "",
       commander: {
         characterID: commanderID,
         name: String(commanderCharacter.characterName || `Pilot ${commanderID}`),
@@ -1618,10 +1999,12 @@ function getOverview(options = {}) {
       humanCount: memberRows.filter((row) => !row.isBot).length,
       members: memberRows.sort((left, right) => Number(right.isCommander) - Number(left.isCommander) ||
         Number(left.isBot) - Number(right.isBot) || left.name.localeCompare(right.name)),
-      fittings: listCommanderFittings(commanderID),
+      fittings: botFleet ? [] : listCommanderFittings(commanderID),
     });
   }
-  fleets.sort((left, right) => right.botCount - left.botCount || left.fleetID - right.fleetID);
+  // People's fleets first, then the bots' own.
+  fleets.sort((left, right) => Number(left.botLed) - Number(right.botLed) ||
+    right.botCount - left.botCount || left.fleetID - right.fleetID);
   return {
     generatedAt: new Date().toISOString(),
     fleetTypes: TYPE_KEYS.map((key) => ({ key, label: FLEET_TYPES[key].label, summary: FLEET_TYPES[key].summary })),
@@ -1632,6 +2015,7 @@ function getOverview(options = {}) {
 module.exports = {
   FLEET_TYPES,
   advanceFleetDuty,
+  commanderShouldWait,
   getDoctrine,
   enrolledIDs,
   getOverview,
@@ -1641,6 +2025,8 @@ module.exports = {
   runCommand,
   shipFitsJob,
   _testing: {
+    botFleets,
+    maintainBotFleets,
     chooseTarget,
     commanderOfFleet,
     deliverToCommander,
@@ -1652,6 +2038,8 @@ module.exports = {
     reconcileBot,
     deps,
     reset() {
+      botFleets.clear();
+      lastBotFleetFormAtMs = 0;
       doctrines.clear();
       doctrinesLoaded = false;
       members.clear();
