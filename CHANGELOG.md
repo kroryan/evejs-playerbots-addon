@@ -3,6 +3,24 @@
 Newest first. The Docker add-on keeps the upstream version number (0.2.152);
 the Windows launcher package adds a fourth number for its own releases.
 
+## Unreleased: home base
+
+- **Bots live around their headquarters.** A corporation's home is its Upwell
+  headquarters structure: one chosen with `/bots corp hq set` or on the
+  dashboard, else the structure its bots built and marked. A corporation with
+  no structure can use a saved NPC station instead; with neither, its pilots
+  roam as before.
+- A docked pilot with no job, more jumps from home than the home range, flies
+  home before taking the next one ("Flying home to corporation
+  headquarters"). Traders still follow the markets.
+- Miners base their trips at the headquarters when its system has belts, is
+  high-security and (for a structure) the structure has a quantum core;
+  otherwise at the nearest high-security station with belts within range of
+  home. Combat pilots look for anomalies starting from home.
+- New setting **Stay within (jumps of HQ)**, default 5 (0 turns it off), and
+  `EVEJS_PLAYER_BOTS_HOME_RANGE_JUMPS`. Shown in a new Headquarters panel in
+  Settings.
+
 ## Unreleased: bot-led fleets
 
 - **Bot corporations form their own fleets.** A bot mining from a station or

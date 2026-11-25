@@ -1315,6 +1315,13 @@ function chooseAssignment(bot, options = {}) {
   }
   const structurePackage = packageItem;
   if (structurePurchasePlan) return { kind: "structure-procurement", plan: structurePurchasePlan };
+  // Between jobs, a pilot far from its corporation's headquarters flies home
+  // first, so its next job is found around home (playerBotHomeBaseRuntime.js).
+  if (!options.prioritizeHeadquarters && options.skipReturnHome !== true) {
+    let homeward = null;
+    try { homeward = require("./playerBotHomeBaseRuntime").chooseReturnHome(bot); } catch (_) { homeward = null; }
+    if (homeward) return homeward;
+  }
   if (bot.specialty !== "security") {
     const warRuntime = require("./playerBotWarMobilizationRuntime");
     const warAssignment = warRuntime.getActiveWarCombatAssignment(bot);
@@ -2261,7 +2268,7 @@ async function runDirectorInternal(bots = [], options = {}) {
       : assignment.kind === "sovereignty"
       ? require("./playerBotSovereigntyRuntime").startOperation(bot.characterName, assignment.objective, { autonomous: true })
       : assignment.kind === "relocate"
-      ? operationRuntime.startRelocation(bot.characterName, assignment.stationID)
+      ? operationRuntime.startRelocation(bot.characterName, assignment.stationID, assignment.home === true ? { home: true } : {})
       : assignment.kind === "mine" && assignment.territorialBase
       ? operationRuntime.startMining(bot.characterName, MINING_TRIPS_PER_ASSIGNMENT, {
         autonomous: true,

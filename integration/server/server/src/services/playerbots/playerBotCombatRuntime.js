@@ -535,7 +535,8 @@ function findNearestCombatAnomalyBase(bot, fitProfile, maxHops = 20, options = {
   if (!fitProfile || !(Number(fitProfile.maxSiteDifficulty) > 0)) {
     return { success: false, message: "The active hull has no validated combat-anomaly fit tier." };
   }
-  const startSystemID = getCurrentSystemID(bot);
+  // A pilot with a home searches around its headquarters, not where it is.
+  const startSystemID = normalizeID(options.originSystemID) || getCurrentSystemID(bot);
   if (!startSystemID) return { success: false, message: "Could not determine the bot's current system." };
   const character = require("../character/characterState").getCharacterRecord(bot.characterID) || {};
   const corporationID = normalizeID(character.corporationID || bot.corporationID);

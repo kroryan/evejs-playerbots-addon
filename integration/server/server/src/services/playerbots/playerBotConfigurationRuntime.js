@@ -64,6 +64,8 @@ function defaults() {
     botFleetsEnabled: process.env.EVEJS_PLAYER_BOTS_BOT_FLEETS !== "0",
     maxBotFleets: envInteger("EVEJS_PLAYER_BOTS_MAX_BOT_FLEETS", 20, 0, 1_000),
     botFleetSize: envInteger("EVEJS_PLAYER_BOTS_BOT_FLEET_SIZE", 5, 2, 10),
+    // Bots work within this many jumps of their corporation's headquarters; 0 lets them roam.
+    homeRangeJumps: envInteger("EVEJS_PLAYER_BOTS_HOME_RANGE_JUMPS", 5, 0, 30),
   };
 }
 
@@ -91,6 +93,7 @@ const BOUNDS = Object.freeze({
   addonRequestTimeoutMs: [10_000, 10 * 60 * 1000],
   maxBotFleets: [0, 1_000],
   botFleetSize: [2, 10],
+  homeRangeJumps: [0, 30],
 });
 
 function readStored() {

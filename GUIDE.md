@@ -793,6 +793,31 @@ name. It becomes the corporation's mining base and the depot for its
 deposits, and its caretaker keeps it fuelled and powered first, then every
 other structure the corporation owns.
 
+### Home base
+
+Like players in a corporation, bots live and work around their headquarters.
+Home is, in order:
+
+1. a structure chosen with `/bots corp hq set` or on the dashboard;
+2. the structure the corporation's bots built and marked as headquarters;
+3. an NPC station chosen the same way, only for a corporation with no
+   headquarters structure.
+
+A corporation with none of these has no home, and its pilots roam as before.
+An HQ nobody can dock at (docking service offline) is no home.
+
+- A docked pilot with no job, more jumps from home than the home range, flies
+  home before taking the next one. Traders follow the markets instead.
+- Miners base their trips at the headquarters when its system has asteroid
+  belts, is high-security (0.45 or better) and, for a structure, the structure
+  has a quantum core. Otherwise they use the nearest high-security station
+  with belts within range of home.
+- Combat pilots look for anomalies starting from home.
+
+| Setting | Default | Environment variable |
+| --- | --- | --- |
+| Stay within (jumps of HQ) | 5 | `EVEJS_PLAYER_BOTS_HOME_RANGE_JUMPS` (0 to 30; 0 turns home base off) |
+
 ### Markets and Jita
 
 - The seeded market exists only in Jita (every Jita station, 10,000 units of

@@ -106,6 +106,9 @@ random emblems, or names from your own name library.
 work every few minutes, a limited number at a time so the server stays
 responsive. Work is saved as it goes and resumes after a restart.
 
+- **Home base:** pilots live around their corporation's Upwell headquarters,
+  fly home between jobs when they stray beyond 5 jumps, and mine and rat
+  near it.
 - **Mining:** belt mining, refining and selling, or delivery to the
   corporation's headquarters, with security escorts when rats are about.
 - **Industry:** manufacturing paid from a personal or corporation wallet,

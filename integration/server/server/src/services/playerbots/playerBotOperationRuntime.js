@@ -3258,12 +3258,15 @@ async function advanceRegionalSaleRoute(operation, bot) {
   return { delayMs: STEP_DELAY_MS };
 }
 
-function startRelocation(botQuery, destinationStationID) {
+function startRelocation(botQuery, destinationStationID, options = {}) {
   const bot = getPlayerBots().resolveBot(botQuery);
   const refusal = assertCanStart(bot);
   if (refusal) return { success: false, message: refusal };
   const stationID = normalizePositiveInteger(destinationStationID);
-  const station = worldData.getStationByID(stationID);
+  const home = options.home === true;
+  // Going home may end at the corporation's own structure.
+  const station = worldData.getStationByID(stationID) ||
+    (home && typeof worldData.getStructureByID === "function" ? worldData.getStructureByID(stationID) : null);
   if (!station) return { success: false, message: "Relocation destination " + (stationID || "unknown") + " is not a supported station." };
   const character = getCharacterRecord(bot.characterID) || {};
   const originSystemID = normalizePositiveInteger(character.solarSystemID);
@@ -3277,11 +3280,17 @@ function startRelocation(botQuery, destinationStationID) {
     homeStationID: stationID,
     originSystemID,
     destinationSystemID: Number(station.solarSystemID) || 0,
-    reason: "per-system autonomous work distribution",
+    reason: home ? "return to headquarters" : "per-system autonomous work distribution",
+    autonomous: true,
+    ...(home ? { returningHome: true } : {}),
   });
-  record(operation, "Leaving the crowded system for station " + stationID + " in system " + operation.destinationSystemID + "; regular work will resume there.");
+  record(operation, home
+    ? "Flying home to corporation headquarters " + stationID + " in system " + operation.destinationSystemID + "; the next job will be found around home."
+    : "Leaving the crowded system for station " + stationID + " in system " + operation.destinationSystemID + "; regular work will resume there.");
   saveOperation(operation);
-  return { success: true, operation, message: bot.characterName + " will relocate to station " + stationID + " to continue work in a less crowded system." };
+  return { success: true, operation, message: home
+    ? bot.characterName + " is flying home to headquarters " + stationID + "."
+    : bot.characterName + " will relocate to station " + stationID + " to continue work in a less crowded system." };
 }
 
 function startSell(botQuery, stationID = null, originStationID = null, options = {}) {
@@ -4149,9 +4158,11 @@ async function advancePlanetaryCollection(operation, bot) {
 async function advanceRelocation(operation, bot) {
   const step = await travelToStation(operation, bot, Number(operation.destinationStationID));
   if (step) return step;
-  return finish(operation, "Relocation complete: arrived at station " + operation.destinationStationID +
-    " in system " + stationSystemID(operation.destinationStationID) +
-    " to spread autonomous work across systems.");
+  return finish(operation, operation.returningHome
+    ? "Home: docked at corporation headquarters " + operation.destinationStationID + "."
+    : "Relocation complete: arrived at station " + operation.destinationStationID +
+      " in system " + stationSystemID(operation.destinationStationID) +
+      " to spread autonomous work across systems.");
 }
 
 async function advanceFleetFollow(operation, bot, dependencies = {}) {
@@ -4944,6 +4955,11 @@ function startMining(botQuery, maxTrips = 1, options = {}) {
     return { success: false, message: `The system for ${homeStationID} has no asteroid belts.` };
   }
   const marketStationWasConfigured = Boolean(normalizePositiveInteger(options.marketStationID));
+  // Autonomous miners work from their corporation's headquarters, or the
+  // nearest belt station to it (playerBotHomeBaseRuntime.js).
+  if (!homeStationID && options.autonomous === true) {
+    try { homeStationID = normalizePositiveInteger(require("./playerBotHomeBaseRuntime").homeMiningStation(bot)); } catch (_) { homeStationID = 0; }
+  }
   if (!homeStationID) {
     const currentStationID = normalizePositiveInteger(character.stationID);
     const economy = require("./playerBotEconomyRuntime");
@@ -5113,6 +5129,8 @@ function startCombat(botQuery, mode = "security", options = {}) {
   const defensiveTargetID = normalizePositiveInteger(options.defensiveTargetID);
   const anomalyTarget = !defensiveTargetID && !miningEscortTarget && normalizedMode === "security"
     ? combat.findNearestCombatAnomalyBase(bot, fitProfile, 20, {
+      // Ratters look for sites around home first.
+      originSystemID: homeCombatOrigin(bot),
       excludedSiteInstanceIDs: failedAnomalySites.map((entry) => Number(entry.siteInstanceID)).filter(Boolean),
       targetDifficulty: require("./playerBotCombatProgressRuntime")
         .getNextSiteDifficulty(bot.characterID, fitProfile && fitProfile.maxSiteDifficulty),
@@ -6353,6 +6371,15 @@ function retireOperationForRemovedPilot(characterID, reason = "The pilot was rem
   record(operation, reason);
   saveOperation(operation);
   return true;
+}
+
+// The headquarters system a pilot's combat-site search starts from, or 0.
+function homeCombatOrigin(bot) {
+  try {
+    return normalizePositiveInteger(require("./playerBotHomeBaseRuntime").searchOriginSystemID(bot));
+  } catch (_) {
+    return 0;
+  }
 }
 
 // Bot-led fleets (playerBotFleetCommandRuntime.js): a commander waits for its pilots.

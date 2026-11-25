@@ -259,7 +259,7 @@ export const TOPICS = [
     group: "corps",
     title: "Commanding a corporation",
     summary: "Recall, send to work, headquarters, priorities and per-pilot orders.",
-    keywords: "corporation recall work pause resume cancel headquarters hq deposit priorities selected pilots command log restart standing order",
+    keywords: "corporation recall work pause resume cancel headquarters hq home base range roam deposit priorities selected pilots command log restart standing order",
     body: () => [
       p("The Corporations page lists every bot corporation with what its pilots are doing; type in the box above the list to find one. Open one to command it. Its page has four tabs: <strong>Overview</strong> (what its pilots are doing, orders, headquarters and priorities), <strong>Pilots</strong>, <strong>Logo</strong> and <strong>Command log</strong>."),
       h("Whole-corporation orders"),
@@ -276,6 +276,7 @@ export const TOPICS = [
         "Set headquarters to one of the corporation's structures or any station, or go back to its own HQ.",
         "Choose what happens to mined ore and PI goods from orders: sell them, deposit them at headquarters, use Corporation Deliveries, or a hangar division.",
       ]),
+      p("Pilots live around their headquarters: the corporation's Upwell headquarters structure, or a station you set if it has no structure. A pilot with no job further than the <strong>Stay within (jumps of HQ)</strong> setting (5 by default) flies home first, miners work from the headquarters or the nearest belt station to it, and combat pilots look for sites near it. Traders follow the markets. Set the range to 0 to let pilots roam."),
       h("Priorities"),
       p("An ordered list of the kinds of work the corporation prefers. Move items up or down, remove them or add new ones, then save."),
       h("Ordering just some pilots"),
