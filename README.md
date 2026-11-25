@@ -118,6 +118,10 @@ responsive. Work is saved as it goes and resumes after a restart.
 - **Trade:** buying and selling, standing buy and sell rules, courier
   contracts, and mineral buy orders that give hubs outside Jita a real
   market.
+- **Grievances and gate camps:** repeated attacks on a corporation's pilots
+  mark the aggressor hostile and then bring a war; security pilots camp their
+  headquarters' gates against war targets, criminals and (in low and null)
+  hostiles. The dashboard's Reputation page tracks it all.
 - **Trade haulers:** traders climb their race's hauler line up to the Jump
   Freighter, run the fittings other bots need from Jita to their hub, and fly
   Freighters and Jump Freighters with an escort of combat corpmates.
@@ -344,6 +348,7 @@ and so on; see [Roster and population](GUIDE.md#roster-and-population)).
 | `STARTUP_SEED_BATCH_SIZE` | off | 1–25: create that many pilots while starting |
 | `STARTING_CAPITAL` | 1,000,000,000 | ISK each new pilot starts with |
 | `TRADER_CAPITAL` | 20,000,000,000 | A trader with less is topped up once to this, for its freighters; `0` turns it off |
+| `RISK_TOLERANCE` | 2 | 0 keeps headquarters miners in high-sec, 1 lets them into low-sec, 2 into null-sec |
 | `HOME_RANGE_JUMPS` | 5 | Pilots more jumps than this from their corporation HQ fly home between jobs; `0` turns it off |
 | `ORDER_RESTORE_DELAY_MS` | 60000 | Wait after start-up before saved corporation orders are re-issued |
 | `BOT_VERSUS_BOT` | on | Pirate and war patrols may target bots |

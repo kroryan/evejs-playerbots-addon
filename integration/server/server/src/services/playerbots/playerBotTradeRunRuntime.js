@@ -1,8 +1,10 @@
 "use strict";
 
 // Trade runs: what a market importer does. A trader flying a hauler buys the
-// modules, drones and charges bot pilots fit to their ships at the seed
-// market, hauls them to its own trade hub and lists them there, so pilots
+// modules, drones and charges bot pilots fit to their ships, and the minerals
+// and fuel blocks builders and caretakers need, at the Jita seed market or at
+// another empire hub that undercuts it, hauls them to its own trade hub and
+// lists them there, so pilots
 // upgrading at that hub find stock without flying to Jita. Bots never list in
 // Jita, and a Jita purchase is refused while the item is sold anywhere else
 // in the region (playerBotTradeRuntime.buy), so those items are skipped.
@@ -53,30 +55,67 @@ function balanceOf(bot) {
   }
 }
 
-// What the trader's hub is short of: { hubStationID, sourceStationID,
-// maxSpend, items: [{ typeID, quantity, referencePrice }] }, or null.
+// Staples every hub should hold besides fittings: minerals for builders and
+// fuel blocks for structure caretakers. [typeID, units to hold]
+const STAPLES = Object.freeze([
+  [34, 500_000], [35, 150_000], [36, 40_000], [37, 10_000], [38, 2_500], [39, 1_000], [40, 250], // minerals
+  [4051, 2_000], [4246, 2_000], [4247, 2_000], [4312, 2_000], // fuel blocks
+]);
+
+// The wanted stock: ladder fittings for ten fits each, then the staples.
+function demand() {
+  const fittings = deps.operations().listShipLadderItemDemand()
+    .map(({ typeID, perFit }) => ({ typeID: positive(typeID), target: Math.max(1, Number(perFit) || 1) * FITS_TO_STOCK }));
+  return [...fittings, ...STAPLES.map(([typeID, target]) => ({ typeID, target }))];
+}
+
+// Where an item is cheapest away from the trader's own hub: another empire
+// hub (a run between hubs, as a regional trader would) or the Jita seed
+// market. Other hubs only win when they undercut Jita.
+function cheapestSource(economy, offers, hubStationID, otherHubIDs) {
+  const usable = offers.filter((offer) => Number(offer.price) > 0 && Number(offer.quantity) > 0 &&
+    positive(offer.stationID) !== hubStationID);
+  const seed = usable.filter((offer) => economy.isJitaStation(positive(offer.stationID)))
+    .sort((left, right) => Number(left.price) - Number(right.price))[0] || null;
+  const hub = usable.filter((offer) => otherHubIDs.has(positive(offer.stationID)) &&
+      (!seed || Number(offer.price) < Number(seed.price)))
+    .sort((left, right) => Number(left.price) - Number(right.price))[0] || null;
+  return hub || seed;
+}
+
+// What the trader's hub is short of, from the one source that covers the
+// most of it: { hubStationID, sourceStationID, maxSpend,
+// items: [{ typeID, quantity, referencePrice }] }, or null.
 function planTradeRun(bot) {
   const economy = deps.economy();
   const hubStationID = positive(economy.getHubStationIDForBot(bot));
   if (!hubStationID || economy.isJitaStation(hubStationID)) return null;
   const maxSpend = Math.min(MAX_SPEND_ISK, Math.floor(balanceOf(bot) * SPEND_SHARE));
   if (maxSpend < MIN_SPEND_ISK) return null;
-  const items = [];
-  for (const { typeID, perFit } of deps.operations().listShipLadderItemDemand()) {
-    const target = Math.max(1, Number(perFit) || 1) * FITS_TO_STOCK;
+  const otherHubIDs = new Set(Object.values(economy.REGIONAL_HUB_STATION_IDS || {}).map(positive)
+    .filter((id) => id && id !== hubStationID));
+  const bySource = new Map();
+  for (const { typeID, target } of demand()) {
     const offers = economy.listSellOffers(typeID) || [];
     const hubStock = offers.filter((offer) => positive(offer.stationID) === hubStationID)
       .reduce((total, offer) => total + (Number(offer.quantity) || 0), 0);
     if (hubStock >= target * RESTOCK_SHARE) continue;
-    const seed = offers.filter((offer) => economy.isJitaStation(positive(offer.stationID)) && Number(offer.price) > 0)
-      .sort((left, right) => Number(left.price) - Number(right.price))[0];
-    if (!seed) continue;
-    items.push({ typeID: positive(typeID), quantity: target - hubStock, referencePrice: Number(seed.price) });
-    if (items.length >= MAX_TYPES_PER_RUN) break;
+    const source = cheapestSource(economy, offers, hubStationID, otherHubIDs);
+    if (!source) continue;
+    // Jita counts as one market: the seed station is chosen below.
+    const key = economy.isJitaStation(positive(source.stationID)) ? "jita" : positive(source.stationID);
+    if (!bySource.has(key)) bySource.set(key, { items: [], value: 0 });
+    const group = bySource.get(key);
+    const quantity = target - hubStock;
+    group.items.push({ typeID, quantity, referencePrice: Number(source.price) });
+    group.value += quantity * Number(source.price);
   }
-  if (!items.length) return null;
-  const sourceStationID = positive(economy.findBestJitaSeedStation(items.map(({ typeID, quantity }) => ({ typeID, quantity })))) ||
-    positive(economy.JITA_BUY_STATION_ID);
+  const best = [...bySource.entries()].sort((left, right) => right[1].value - left[1].value)[0];
+  if (!best) return null;
+  const items = best[1].items.slice(0, MAX_TYPES_PER_RUN);
+  const sourceStationID = best[0] === "jita"
+    ? positive(economy.findBestJitaSeedStation(items.map(({ typeID, quantity }) => ({ typeID, quantity })))) || positive(economy.JITA_BUY_STATION_ID)
+    : best[0];
   if (!sourceStationID) return null;
   return { hubStationID, sourceStationID, maxSpend, items };
 }
@@ -220,6 +259,7 @@ async function advance(operation, bot, kit) {
 module.exports = {
   FITS_TO_STOCK,
   MARKUP,
+  STAPLES,
   advance,
   planTradeRun,
   _testing: { deps, buyNext },

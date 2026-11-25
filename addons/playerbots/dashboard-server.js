@@ -526,6 +526,29 @@ function createDashboardServer(options = {}) {
         args: body.args && typeof body.args === "object" && !Array.isArray(body.args) ? body.args : {},
       });
     }
+    if (url.pathname === "/api/reputation") {
+      if (request.method !== "GET") {
+        send(response, 405, "text/plain; charset=utf-8", "Method not allowed.", { allow: "GET" });
+        return;
+      }
+      return proxyApi(response, "/v1/dashboard/reputation");
+    }
+    if (url.pathname === "/api/reputation-command") {
+      if (request.method !== "POST") {
+        send(response, 405, "text/plain; charset=utf-8", "Method not allowed.", { allow: "POST" });
+        return;
+      }
+      if (!isSameOriginRequest(request)) {
+        send(response, 403, "application/json; charset=utf-8", JSON.stringify({ error: "Cross-origin dashboard commands are blocked." }));
+        return;
+      }
+      const body = await readJsonBody(request);
+      return proxyMutation(response, "/v1/dashboard/reputation-command", "POST", {
+        corporationID: Number(body.corporationID) || 0,
+        targetCorporationID: Number(body.targetCorporationID) || 0,
+        action: String(body.action || "").slice(0, 12),
+      });
+    }
     if (url.pathname === "/api/corp-command" || url.pathname === "/api/bot-command") {
       if (request.method !== "POST") {
         send(response, 405, "text/plain; charset=utf-8", "Method not allowed.", { allow: "POST" });

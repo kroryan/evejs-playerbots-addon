@@ -604,6 +604,32 @@ undocking (up to 5 minutes) and, in each system on the route, for the escort
 to catch up before it takes the next gate (up to 90 seconds). Bot-led mining
 and combat fleets wait at gates too, for up to a minute.
 
+### Grievances, hostility and war
+
+Bot corporations answer violence the way player corporations do. Every attack
+on a bot by another corporation's pilot, bot or person, is an incident (at
+most one per attacker and victim every two minutes; NPCs, corpmates and
+alliance mates never count). Two incidents in 24 hours mark the aggressor's
+corporation hostile for seven days; three bring a war declaration through the
+normal war authority, bill and 24-hour timer, when the corporation has a
+structure to serve as war headquarters (one attempt every 30 minutes across
+the server). Piracy pilots hunting cargo-carrying ships, bots included, start
+most of these feuds.
+
+While a corporation is at war or has hostiles, up to three of its security
+pilots camp the stargates of its headquarters system, 20 minutes at a time.
+They engage war targets and criminal or suspect pilots anywhere, and hostile
+corporations only in low and null security space, where it is no crime.
+
+The dashboard's **Reputation** page lists every grievance with its attacks
+today and in total, whether the aggressor is hostile or at war, and the bots'
+security status. Mark hostile, Declare war and Forgive change a pairing by
+hand; Forgive stops further hostility and war from those incidents.
+
+**Risk tolerance** (Settings → Headquarters, `EVEJS_PLAYER_BOTS_RISK_TOLERANCE`,
+default 2) sets how far into dangerous space pilots work around their
+headquarters: 0 high-sec only, 1 low-sec, 2 null-sec.
+
 ### Trade haulers
 
 Trade pilots fly haulers, not mining ships. Each climbs its own race's line,
@@ -628,7 +654,10 @@ of, buys them at the Jita seed market with up to a quarter of its wallet (2B
 ISK at most), hauls them to the hub and lists them at the Jita price plus 15%.
 Pilots upgrading at that hub then buy there instead of flying to Jita. Items
 already sold elsewhere in the region are skipped, since Jita is only the
-fallback market.
+fallback market. Hubs also keep minerals (for builders) and fuel blocks (for
+structure caretakers) in stock, and a trader buys at another empire hub when
+that hub undercuts Jita, so goods move between hubs too. Pilots buying ship
+upgrades use their own hub whenever it stocks the whole fit.
 
 | Setting | Default | Environment variable |
 | --- | --- | --- |

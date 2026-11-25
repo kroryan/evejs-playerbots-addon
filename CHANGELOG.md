@@ -3,6 +3,27 @@
 Newest first. The Docker add-on keeps the upstream version number (0.2.152);
 the Windows launcher package adds a fourth number for its own releases.
 
+## Unreleased: grievances, gate camps and wider trade
+
+- **Grievances.** Every attack on a bot by another corporation's pilot (bot or
+  person) is recorded against the victim's corporation. Two attacks in a day
+  mark the aggressor hostile for a week; three bring a war declaration through
+  the normal war authority (it needs a structure as war headquarters and the
+  usual bill). NPCs, corpmates and alliance mates never count.
+- **Gate camps.** While its corporation is at war or has hostiles, up to three
+  security pilots camp the headquarters system's stargates for 20 minutes at a
+  time. They shoot only lawful targets: war targets and criminal or suspect
+  pilots anywhere, and hostile corporations in low and null security space.
+- **Risk tolerance** (Settings, `EVEJS_PLAYER_BOTS_RISK_TOLERANCE`, default 2):
+  0 keeps headquarters miners in high-sec, 1 lets them into low-sec, 2 into
+  null-sec, so corporations based in null mine at home.
+- **Reputation page** on the dashboard: grievances, hostility and wars per
+  corporation pair, with Mark hostile, Declare war and Forgive, plus the bots'
+  security status (outlaws and upstanding pilots).
+- **Trade runs reach further.** Hubs also stock minerals and fuel blocks, and a
+  trader buys from another empire hub when it undercuts Jita. Pilots buying
+  ship upgrades use their own hub whenever it stocks the whole fit.
+
 ## Unreleased: trade haulers and escorts
 
 - **Traders fly haulers.** Trade pilots climb their own race's hauler line

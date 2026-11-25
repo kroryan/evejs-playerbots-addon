@@ -97,6 +97,30 @@ function isEligibleWarTarget(entity, context = {}) {
   return typeof context.isWarTarget === "function" && context.isWarTarget(characterID) === true;
 }
 
+// Gate camps defend the corporation's home system. Lawful targets only: war
+// targets and criminal or suspect pilots anywhere, and corporations marked
+// hostile (playerBotGrievanceRuntime.js) only in low or null security space,
+// where shooting them is not a crime that brings CONCORD.
+function isEligibleGateCampTarget(entity, context = {}) {
+  if (!entity || String(entity.kind || "").toLowerCase() !== "ship" || entity.session == null) return false;
+  const characterID = resolveEntityCharacterID(entity);
+  if (!characterID || characterID === positiveID(context.characterID) ||
+      positiveID(entity.typeID) === positiveID(context.capsuleTypeID || 670)) return false;
+  const corporationID = positiveID(entity.corporationID || entity.corpID);
+  const allianceID = positiveID(entity.allianceID);
+  if (corporationID && corporationID === positiveID(context.corporationID)) return false;
+  if (allianceID && allianceID === positiveID(context.allianceID)) return false;
+  if (typeof context.isFleetMate === "function" && context.isFleetMate(characterID)) return false;
+  if (context.allowManagedBotTargets !== true &&
+      typeof context.isManagedBot === "function" && context.isManagedBot(characterID)) return false;
+  if (typeof context.isWarTarget === "function" && context.isWarTarget(characterID) === true) return true;
+  if ((typeof context.isCriminal === "function" && context.isCriminal(characterID)) ||
+      (typeof context.isSuspect === "function" && context.isSuspect(characterID))) return true;
+  const systemSecurity = Number(context.systemSecurity);
+  return Number.isFinite(systemSecurity) && systemSecurity < 0.45 &&
+    typeof context.isHostile === "function" && context.isHostile(characterID) === true;
+}
+
 function isEligibleNullsecConflictTarget(entity, context = {}) {
   if (!entity || String(entity.kind || "").toLowerCase() !== "ship" || entity.session == null) return false;
   const characterID = resolveEntityCharacterID(entity);
@@ -150,10 +174,12 @@ function selectCombatTarget(entities = [], mode = "security", context = {}) {
       ? candidates.filter((entity) => isEligibleWarTarget(entity, context))
       : mode === "nullsec-conflict"
         ? candidates.filter((entity) => isEligibleNullsecConflictTarget(entity, context))
+      : mode === "gate-camp"
+        ? candidates.filter((entity) => isEligibleGateCampTarget(entity, context))
       : [];
   const preferred = mode === "piracy"
     ? playerTargets.length ? playerTargets : pirateNpcs
-    : mode === "war" || mode === "nullsec-conflict" ? playerTargets : pirateNpcs;
+    : mode === "war" || mode === "nullsec-conflict" || mode === "gate-camp" ? playerTargets : pirateNpcs;
   const origin = context.position;
   return preferred.sort((left, right) => {
     const cargoLeft = Number(context.cargoScore && context.cargoScore(left)) || 0;
@@ -166,6 +192,7 @@ function selectCombatTarget(entities = [], mode = "security", context = {}) {
 }
 
 module.exports = {
+  isEligibleGateCampTarget,
   isEligiblePiracyTarget,
   isEligibleDefensiveTarget,
   isEligibleNullsecConflictTarget,

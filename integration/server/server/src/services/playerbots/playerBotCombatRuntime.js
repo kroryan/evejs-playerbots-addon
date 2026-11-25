@@ -19,6 +19,7 @@ const MAX_TRIP_MS = 15 * 60 * 1000;
 const MAX_SITE_TRIP_MS = 2 * 60 * 60 * 1000;
 const MAX_KILLS_PER_TRIP = 5;
 const EMPTY_SYSTEM_GRACE_MS = 90_000;
+const GATE_CAMP_HOLD_MS = 20 * 60 * 1000;
 const WRECK_APPEARANCE_GRACE_MS = 30_000;
 const COMBAT_SITE_CACHE_MS = 15_000;
 const FAILED_SITE_COOLDOWN_MS = 60 * 60 * 1000;
@@ -728,6 +729,9 @@ function getCombatContext(bot, scene, entity, operation = null) {
     isCriminal: crimewatch.isCharacterCriminal,
     securityStatusFor: crimewatch.getCharacterSecurityStatus,
     isWarTarget: (targetCharacterID) => war.areCharactersLegalWarOpponents(bot.characterID, targetCharacterID),
+    isHostile: (targetCharacterID) => {
+      try { return require("./playerBotGrievanceRuntime").isHostileCharacter(corporationID, targetCharacterID); } catch (_) { return false; }
+    },
     hasLimitedEngagement: (targetCharacterID) => crimewatch.hasActiveLimitedEngagement(bot.characterID, targetCharacterID),
     isNullsecConflictTarget: (target) => Boolean(operation && operation.mode === "nullsec-conflict" &&
       require("./playerBotNullsecConflictRuntime").isEligibleTarget(bot, target, Number(scene.systemID))),
@@ -782,7 +786,7 @@ function assessDefensiveResponse(bot, target, scene, operation = null) {
   const activeCombat = operation && operation.kind === "combat" &&
     Number(operation.characterID) === Number(bot && bot.characterID) &&
     ["active", "holding"].includes(operation.status);
-  const role = activeCombat && ["security", "piracy", "war", "nullsec-conflict"].includes(operation.mode)
+  const role = activeCombat && ["security", "piracy", "war", "nullsec-conflict", "gate-camp"].includes(operation.mode)
     ? operation.mode === "piracy" ? "piracy" : "security"
     : String(bot && bot.specialty || "");
   if (!bot || !target || !scene || !["security", "piracy"].includes(role)) {
@@ -920,6 +924,8 @@ function findWarpTackler(scene, shipEntity, bot, operation) {
         ? combatPolicy.isEligibleWarTarget(entity, getCombatContext(bot, scene, shipEntity, operation))
         : operation.mode === "nullsec-conflict"
           ? combatPolicy.isEligibleNullsecConflictTarget(entity, getCombatContext(bot, scene, shipEntity, operation))
+          : operation.mode === "gate-camp"
+            ? combatPolicy.isEligibleGateCampTarget(entity, getCombatContext(bot, scene, shipEntity, operation))
           : combatPolicy.isPirateNpc(entity))))
     .sort((left, right) => normalizeID(left.itemID) - normalizeID(right.itemID));
   return sources[0] || null;
@@ -1261,7 +1267,10 @@ async function advanceCombat(operation, bot, kit) {
     const structurePatrolTarget = operation.mode === "nullsec-conflict" && operation.patrolEntityID
       ? worldData.getStructureByID(operation.patrolEntityID)
       : null;
-    const belt = structurePatrolTarget
+    // A gate camp sits on one of the home system's stargates.
+    const belt = operation.mode === "gate-camp" && operation.patrolEntityID
+      ? { itemID: Number(operation.patrolEntityID), entityType: "stargate" }
+      : structurePatrolTarget
       ? { itemID: Number(operation.patrolEntityID), entityType: "structure" }
       : operation.miningEscortBeltID
         ? asteroidBelts.find((entry) => Number(entry.itemID) === Number(operation.miningEscortBeltID)) || null
@@ -1282,7 +1291,7 @@ async function advanceCombat(operation, bot, kit) {
     operation.emptySinceAt = 0;
     operation.stage = belt ? "to-belt" : "engage";
     record(operation, kit, belt
-      ? `${alreadyInSpace ? "Reached space for" : "Undocked for"} a ${operation.mode} patrol in system ${operation.targetSystemID}, ${belt.entityType === "structure" ? `structure ${operation.beltID}` : `belt ${operation.beltID}`}.`
+      ? `${alreadyInSpace ? "Reached space for" : "Undocked for"} a ${operation.mode} patrol in system ${operation.targetSystemID}, ${belt.entityType === "structure" ? `structure ${operation.beltID}` : belt.entityType === "stargate" ? `stargate ${operation.beltID}` : `belt ${operation.beltID}`}.`
       : `System ${operation.targetSystemID} has no asteroid belt; undocked to scan the conflict system grid directly.`);
     return { delayMs: belt ? 15_000 : 10_000 };
   }
@@ -1755,6 +1764,8 @@ async function advanceCombat(operation, bot, kit) {
           ? combatPolicy.isEligibleWarTarget(target, combatContext)
           : operation.mode === "nullsec-conflict"
             ? combatPolicy.isEligibleNullsecConflictTarget(target, combatContext)
+          : operation.mode === "gate-camp"
+            ? combatPolicy.isEligibleGateCampTarget(target, combatContext)
           : combatPolicy.isPirateNpc(target);
       const stillEligible = stillEligibleByMode && require("../../space/destiny/identity/interactionScope").canEntitiesInteractLocally(entity,target) &&
         (Number(operation.defensiveTargetID) === Number(target.itemID) || !operation.siteInstanceID ||
@@ -1878,14 +1889,16 @@ async function advanceCombat(operation, bot, kit) {
         return { delayMs: 15_000 };
       }
       if (!Number(operation.emptySinceAt)) operation.emptySinceAt = Date.now();
-      if (Date.now() - Number(operation.emptySinceAt) >= EMPTY_SYSTEM_GRACE_MS) {
+      // A gate camp holds its gate far longer than a patrol waits on a belt.
+      const emptyGraceMs = operation.mode === "gate-camp" ? GATE_CAMP_HOLD_MS : EMPTY_SYSTEM_GRACE_MS;
+      if (Date.now() - Number(operation.emptySinceAt) >= emptyGraceMs) {
         operation.stage = "return";
         if (operation.siteInstanceID) {
           operation.siteIncomplete = true;
           operation.siteFailureReason = "active-site-has-no-target-or-unlocked-gate";
           recordFailedAnomalySite(operation, operation.siteFailureReason);
         }
-        record(operation, kit, `No eligible ${operation.mode === "piracy" ? "cargo-bearing pirate target or pirate NPC" : operation.mode === "war" ? "active war target" : operation.mode === "nullsec-conflict" ? "opposing corporation ship in the structure-conflict system" : "pirate NPC"} appeared during the patrol window; returning to station.`);
+        record(operation, kit, `No eligible ${operation.mode === "piracy" ? "cargo-bearing pirate target or pirate NPC" : operation.mode === "war" ? "active war target" : operation.mode === "nullsec-conflict" ? "opposing corporation ship in the structure-conflict system" : operation.mode === "gate-camp" ? "hostile or war-target ship" : "pirate NPC"} appeared during the patrol window; returning to station.`);
         return { delayMs: 15_000 };
       }
       kit.save(operation);
@@ -2207,7 +2220,7 @@ async function advanceCombat(operation, bot, kit) {
       return kit.block(operation, "holding", `Could not settle the corporation share: ${String(error && error.message || error).slice(0, 160)}`);
     }
     operation.noOpportunity = Number(operation.kills || 0) === 0 && operation.siteCompleted !== true;
-    const operationLabel = operation.mode === "piracy" ? "Piracy" : operation.mode === "war" ? "War patrol" : operation.mode === "nullsec-conflict" ? "Null-sec structure conflict patrol" : "Security patrol";
+    const operationLabel = operation.mode === "piracy" ? "Piracy" : operation.mode === "war" ? "War patrol" : operation.mode === "nullsec-conflict" ? "Null-sec structure conflict patrol" : operation.mode === "gate-camp" ? "Gate camp" : "Security patrol";
     const outcome = operation.siteUnavailable === true
       ? ` ended with ${operation.siteLabel} incomplete because dungeon authority no longer listed it; the anomaly was not reported as cleared: `
       : operation.siteHandedOff === true

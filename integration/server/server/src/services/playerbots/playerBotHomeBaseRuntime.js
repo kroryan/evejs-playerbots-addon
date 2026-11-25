@@ -181,14 +181,49 @@ function homeMiningStation(bot) {
   const system = world.getSolarSystemByID(home.systemID) || {};
   const hasBelts = (world.getAsteroidBeltsForSystem(home.systemID) || []).length > 0;
   const structureOk = home.kind !== "structure" || home.hasQuantumCore === true;
-  if (hasBelts && Number(system.security) >= 0.45 && structureOk) return home.stationID;
+  const floor = minWorkSecurity();
+  if (hasBelts && Number(system.security) >= floor && structureOk) return home.stationID;
   try {
     const jita = require("./playerBotEconomyRuntime").JITA_SYSTEM_ID;
-    const nearest = deps.operations().findNearestMiningStation(home.systemID, 0.45, homeRangeJumps(), [jita]);
+    const nearest = deps.operations().findNearestMiningStation(home.systemID, floor, homeRangeJumps(), [jita]);
     return nearest ? positive(nearest.stationID) : 0;
   } catch {
     return 0;
   }
+}
+
+// The lowest system security pilots work in: the "fear" setting. 0 keeps
+// them in high-sec (0.45), 1 lets them into low-sec, 2 into null-sec.
+function minWorkSecurity() {
+  try {
+    const tolerance = Math.trunc(Number(deps.configuration().getSettings().riskTolerance));
+    return tolerance >= 2 ? -1 : tolerance === 1 ? 0.1 : 0.45;
+  } catch {
+    return 0.45;
+  }
+}
+
+// Where a security pilot camps its home system: one of the HQ system's
+// stargates (spread across pilots), docking at an NPC station in the system
+// or the HQ itself. { success, stationID, systemID, patrolEntityID, ... }.
+function gateCampBase(bot) {
+  const home = getHomeBase(corporationOf(bot));
+  if (!home) return { success: false, message: "The corporation has no headquarters to defend." };
+  const world = deps.worldData();
+  const gates = (world.getStargatesForSystem(home.systemID) || [])
+    .map((gate) => positive(gate.itemID || gate.stargateID)).filter(Boolean).sort((left, right) => left - right);
+  if (!gates.length) return { success: false, message: "The headquarters system has no stargates to camp." };
+  const npcStation = (world.getStationsForSystem(home.systemID) || [])
+    .map((station) => positive(station.stationID || station.itemID)).filter(Boolean).sort((left, right) => left - right)[0];
+  return {
+    success: true,
+    mode: "gate-camp",
+    stationID: npcStation || home.stationID,
+    systemID: home.systemID,
+    patrolEntityID: gates[positive(bot && bot.characterID) % gates.length],
+    hops: 0,
+    risk: null,
+  };
 }
 
 // The system a bot's searches for work should start from: home.
@@ -203,8 +238,10 @@ module.exports = {
   distanceFromHome,
   getHomeBase,
   homeMiningStation,
+  gateCampBase,
   homeRangeJumps,
   jumpsBetween,
+  minWorkSecurity,
   searchOriginSystemID,
   _testing: {
     deps,

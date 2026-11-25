@@ -445,6 +445,8 @@ export const TOPICS = [
         "The fleet breaks up when the commander's job ends, it goes offline, its pilots leave, or after about three hours.",
         "These fleets show on the Fleets page marked as the bots' own. You can watch them but not change them.",
       ]),
+      h("Grievances, gate camps and war"),
+      p("Attacks on a corporation's pilots by another corporation are grievances. Two in a day mark the aggressor hostile for a week; three bring a war declaration. While at war or with hostiles about, up to three security pilots camp the headquarters system's gates, shooting war targets and criminals anywhere and hostile corporations in low and null security space. The <strong>Reputation</strong> page lists it all and can mark, declare or forgive by hand."),
       h("Escorts for freighters"),
       p("Traders climb their race's hauler line up to the Jump Freighter and run the fittings other bots need from Jita to their trade hub. A trader flying a Freighter or Jump Freighter takes an escort fleet of up to four combat corpmates on every haul. It waits up to five minutes for them to dock with it before undocking, and up to 90 seconds in each system for them to catch up before the next gate."),
       p(`Turn them off, or change how many form and how big they get, under ${see("settings", "Settings")} → <strong>Bot fleets</strong>.`),

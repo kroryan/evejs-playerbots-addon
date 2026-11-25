@@ -264,6 +264,16 @@ function noteIncomingDamage(scene, attackerEntity, targetEntity, targetSession, 
     : 1);
   if (!characterID || !attackerID || !(amount > 0)) return false;
   require("./playerBotLocalDefenseAdapter").reportThreat(scene, attacker, targetEntity, "damage");
+  // Another corporation's pilot shooting a bot is a grievance (see
+  // playerBotGrievanceRuntime.js); NPCs have no pilot and never count.
+  try {
+    const attackerCharacterID = characterIDForEntity(attacker);
+    if (attackerCharacterID) {
+      require("./playerBotGrievanceRuntime").recordAggression({
+        victimCharacterID: characterID, attackerCharacterID, systemID: scene && scene.systemID, whenMs,
+      });
+    }
+  } catch (_) { /* grievances are advisory */ }
   const key = `${characterID}:${attackerID}`;
   const now = Math.max(0, Number(whenMs) || Date.now());
   const last = Number(lastResponseByKey.get(key)) || 0;

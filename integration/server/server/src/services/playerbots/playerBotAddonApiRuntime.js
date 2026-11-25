@@ -48,6 +48,7 @@ function createPlayerBotAddonApiRuntime(options = {}) {
   const loadController = options.loadController || require("./playerBotLoadController").getPlayerBotLoadController();
   const corporationLogos = options.corporationLogos || require("./playerBotCorporationLogoStore").getCorporationLogoStore();
   const fleetCommand = options.fleetCommand || require("./playerBotFleetCommandRuntime");
+  const grievances = options.grievances || require("./playerBotGrievanceRuntime");
   const eventLoopDelay = options.eventLoopDelayMonitor || monitorEventLoopDelay({ resolution: 20 });
   const getEventLoopDelayP95Ms = options.getEventLoopDelayP95Ms || (() => Number(eventLoopDelay.percentile(95)) / 1_000_000 || 0);
   eventLoopDelay.enable();
@@ -350,6 +351,19 @@ function createPlayerBotAddonApiRuntime(options = {}) {
       if (typeof dashboard.invalidate === "function") dashboard.invalidate();
       logger.info(`[PlayerBotsAddon] Dashboard fleet order ${String(body.action).slice(0, 20)} fc=${Number(body.commanderID) || 0}: ${String(result.message || "").slice(0, 160)}`);
       sendJson(response, result.success ? 200 : Number(result.statusCode) || 400, result);
+      return;
+    }
+    if (request.method === "GET" && url.pathname === "/v1/dashboard/reputation") {
+      sendJson(response, 200, grievances.getOverview());
+      return;
+    }
+    if (request.method === "POST" && url.pathname === "/v1/dashboard/reputation-command") {
+      const body = await readBody(request);
+      const result = grievances.runCommand({
+        corporationID: body.corporationID, targetCorporationID: body.targetCorporationID, action: body.action,
+      });
+      logger.info(`[PlayerBotsAddon] Dashboard reputation order ${String(body.action).slice(0, 12)} corp=${Number(body.corporationID) || 0} target=${Number(body.targetCorporationID) || 0}: ${String(result.message || "").slice(0, 160)}`);
+      sendJson(response, result.success ? 200 : 400, result);
       return;
     }
     if (request.method === "GET" && url.pathname === "/v1/dashboard/operations") {

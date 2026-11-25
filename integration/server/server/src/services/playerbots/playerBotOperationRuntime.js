@@ -1997,6 +1997,9 @@ function findUpgradeMarketStation(bot, rungOrOperation) {
   const economy = require("./playerBotEconomyRuntime");
   const candidates = economy.findSellStationsForPackage(needs);
   if (!candidates.length) return hubStationFor(bot);
+  // The pilot's own hub first, whenever it stocks the whole package.
+  const ownHub = Number(hubStationFor(bot)) || 0;
+  if (candidates.some((candidate) => Number(candidate.stationID) === ownHub && candidate.complete)) return ownHub;
   const outsideJita = candidates.filter((candidate) => !candidate.isJita);
   const preferred = outsideJita.length ? outsideJita : candidates.filter((candidate) => candidate.isJita);
   const stationCandidatesBySystem = new Map();
@@ -5175,7 +5178,7 @@ function startMining(botQuery, maxTrips = 1, options = {}) {
 
 function canStartCombatModeForPilot(bot, mode, hasCombatFit) {
   const normalizedMode = String(mode || "").trim().toLowerCase();
-  const shipRole = ["war", "nullsec-conflict"].includes(normalizedMode) ? "security" : normalizedMode;
+  const shipRole = ["war", "nullsec-conflict", "gate-camp"].includes(normalizedMode) ? "security" : normalizedMode;
   return Boolean(bot && (bot.specialty === shipRole ||
     normalizedMode === "war" && hasCombatFit === true));
 }
@@ -5185,14 +5188,14 @@ function startCombat(botQuery, mode = "security", options = {}) {
   const refusal = assertCanStart(bot);
   if (refusal) return { success: false, message: refusal };
   const normalizedMode = String(mode || "").trim().toLowerCase();
-  if (!["security", "piracy", "war", "nullsec-conflict"].includes(normalizedMode)) {
-    return { success: false, message: "Combat mode must be security, war, piracy, or nullsec-conflict." };
+  if (!["security", "piracy", "war", "nullsec-conflict", "gate-camp"].includes(normalizedMode)) {
+    return { success: false, message: "Combat mode must be security, war, piracy, nullsec-conflict or gate-camp." };
   }
   if (normalizedMode === "war" &&
       !require("../corporation/warRuntimeState").hasActiveWarForCharacter(bot.characterID)) {
     return { success: false, message: "War patrol requires an active war; declarations still in the waiting period only allow preparation." };
   }
-  const shipRole = ["war", "nullsec-conflict"].includes(normalizedMode) ? "security" : normalizedMode;
+  const shipRole = ["war", "nullsec-conflict", "gate-camp"].includes(normalizedMode) ? "security" : normalizedMode;
   const hasCombatFit = hasRoleShipFit(bot, shipRole);
   // The war director deliberately mobilizes any cross-trained pilot whose
   // security fit can participate. Keep specialty-specific patrols restricted
@@ -5272,6 +5275,7 @@ function startCombat(botQuery, mode = "security", options = {}) {
   } else if (miningEscortTarget) target = miningEscortTarget;
   else if (normalizedMode === "nullsec-conflict") target = conflictTarget;
   else if (normalizedMode === "piracy") target = combat.findNearestPirateBase(bot);
+  else if (normalizedMode === "gate-camp") target = require("./playerBotHomeBaseRuntime").gateCampBase(bot);
   else if (normalizedMode === "war") target = warTarget;
   else if (anomalyTarget.success) target = anomalyTarget;
   else {

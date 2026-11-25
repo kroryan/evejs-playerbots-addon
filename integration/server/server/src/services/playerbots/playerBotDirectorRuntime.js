@@ -1178,6 +1178,30 @@ function findCoreInstallPlan(structureRuntime, bot) {
     : null;
 }
 
+// Security pilots camp their headquarters system's gates while their
+// corporation is at war or has hostiles about, a few at a time.
+const MAX_GATE_CAMPERS = 3;
+function gateCampWanted(bot, operations) {
+  let home = null;
+  try { home = require("./playerBotHomeBaseRuntime").gateCampBase(bot); } catch (_) { home = null; }
+  if (!home || !home.success) return false;
+  const corporationID = Number(bot.corporationID) || 0;
+  let threatened = false;
+  try { threatened = require("../corporation/warRuntimeState").hasActiveWarForCharacter(bot.characterID); } catch (_) { threatened = false; }
+  if (!threatened) {
+    try {
+      threatened = require("./playerBotGrievanceRuntime").hasActiveHostiles(corporationID);
+    } catch (_) { threatened = false; }
+  }
+  if (!threatened) return false;
+  const active = typeof operations.listActiveOperationRecords === "function"
+    ? operations.listActiveOperationRecords()
+    : typeof operations.listActiveOperations === "function" ? operations.listActiveOperations() : [];
+  const campers = active.filter((operation) => operation && operation.kind === "combat" && operation.mode === "gate-camp" &&
+    Number(operation.corporationID) === corporationID && Number(operation.characterID) !== Number(bot.characterID)).length;
+  return campers < MAX_GATE_CAMPERS;
+}
+
 // A trader's next job: a better hauler when it can afford one, else a trade
 // run when its hub needs stock. null keeps a hauler pilot docked (it never
 // swaps to a mining ship); undefined means it has no hauler yet.
@@ -1516,6 +1540,10 @@ function chooseAssignment(bot, options = {}) {
         return { kind: "combat", mode: "nullsec-conflict" };
       }
     }
+    if (bot.specialty === "security" && gateCampWanted(bot, operations) &&
+        !combatCoolingDown(operations.getOperation(bot.characterID))) {
+      return { kind: "combat", mode: "gate-camp" };
+    }
     if (combatCoolingDown(operations.getOperation(bot.characterID))) return chooseMiningAssignment(bot, options);
     return { kind: "combat", mode: atWar ? "war" : bot.specialty };
   }
@@ -1754,6 +1782,16 @@ async function runDirectorInternal(bots = [], options = {}) {
     } catch (error) {
       require("../../utils/logger").warn(
         `[PlayerBots] Bot rivalry war planning was skipped: ${String(error && error.message || error).slice(0, 180)}.`,
+      );
+    }
+    // Corporations attacked again and again declare war on the aggressor.
+    try {
+      const grievanceWar = await require("./playerBotGrievanceRuntime")
+        .declareGrievanceWars(allRosterBots, { humanControlledBotIDs });
+      if (grievanceWar.declared) summary.grievanceWarsDeclared = 1;
+    } catch (error) {
+      require("../../utils/logger").warn(
+        `[PlayerBots] Grievance war planning was skipped: ${String(error && error.message || error).slice(0, 180)}.`,
       );
     }
   }
