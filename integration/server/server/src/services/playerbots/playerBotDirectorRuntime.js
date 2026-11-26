@@ -2035,6 +2035,7 @@ async function runDirectorInternal(bots = [], options = {}) {
     return entry;
   };
   let assignmentAttempts = 0;
+  const maxCapacityRelocations = getMaxConcurrentCapacityRelocations();
   budget.switchStage("assignment");
   for (const bot of candidates) {
     if (assignmentAttempts >= MAX_DIRECTOR_ASSIGNMENT_ATTEMPTS_PER_PASS) break;
@@ -2053,6 +2054,12 @@ async function runDirectorInternal(bots = [], options = {}) {
     const humanControlled = humanControlledBotIDs.has(Number(bot.characterID));
     const residentCount = systemID ? rosterSystemCounts.get(systemID) || 0 : 0;
     const overSystemLimit = Boolean(systemID && residentCount > autonomousSystemLimit && !humanControlled);
+    // Over the per-system cap a pilot's only work is a relocation trip. While
+    // every relocation slot is taken, skip the costly planning below: with
+    // thousands of pilots in crowded starter systems it made each pass take so
+    // long that the pilots who could work were reached rarely or never.
+    if (overSystemLimit && !needsMinimumProductiveWork &&
+        activeRelocations >= maxCapacityRelocations) continue;
     const escortAssignment = humanControlled ? null : chooseMiningEscortAssignment(bot);
     const coreInstallPlan = escortAssignment ? null : findCoreInstallPlan(structureRuntime, bot);
     const rawStructureMaintenancePlan = escortAssignment || coreInstallPlan ? null :
