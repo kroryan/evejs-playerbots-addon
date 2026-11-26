@@ -55,6 +55,10 @@ the Windows launcher package adds a fourth number for its own releases.
   player buy orders and the set of bot owners are kept for a few seconds
   instead of rereading all 5,000 character records per pilot (16%), and the
   mining escort check reads operations without copying them all (13%).
+- **Map data for the Territory Map add-on.** The private API answers
+  `GET /v1/map/static` (every solar system's position, security and region,
+  and the stargate links) and `GET /v1/map/live` (the pilots in each system
+  and current sovereignty), with the usual add-on token.
 - **Pilots in crowded systems no longer stall the director.** About 3,700
   of 5,000 pilots sat in starter systems over the per-system cap, where the
   only work is a relocation trip, and those are limited to 100 at a time. The

@@ -228,6 +228,15 @@ function createPlayerBotAddonApiRuntime(options = {}) {
         return;
       }
     }
+    // Territory Map add-on: static starmap and live bots and sovereignty.
+    if (request.method === "GET" && url.pathname === "/v1/map/static") {
+      sendJson(response, 200, require("./playerBotMapApiRuntime").buildStaticMap());
+      return;
+    }
+    if (request.method === "GET" && url.pathname === "/v1/map/live") {
+      sendJson(response, 200, require("./playerBotMapApiRuntime").buildLiveMap());
+      return;
+    }
     if (request.method === "GET" && url.pathname === "/v1/roster") {
       const bots = playerBots.listBots();
       sendJson(response, 200, {
