@@ -3,8 +3,14 @@
 Newest first. The Docker add-on keeps the upstream version number (0.2.152);
 the Windows launcher package adds a fourth number for its own releases.
 
-## Unreleased: EveJS 261125.3 and a dashboard that keeps up
+## Unreleased: EveJS 261126.2 and a dashboard that keeps up
 
+- **Works with EveJS 261126.2** (was 261125.3). Three server files the
+  add-on replaces changed upstream (`network/tcp/index.js`,
+  `chat/xmppStubServer.js`, `market/marketProxyService.js`) and merged without
+  conflicts. Native package 0.2.152.18. Saves already on 261125.3 need no
+  conversion; EveJS 261126.2's own upgrade now also handles the far drone
+  target points and renews its lock on large saves.
 - **Works with EveJS 261125.3** (was 261115.2). The 34 server files whose
   stock version changed were merged onto the new versions; see the pull
   request for the hand-resolved ones. EveJS 261125.3 needs Node.js 26, so the

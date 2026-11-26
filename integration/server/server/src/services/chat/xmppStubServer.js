@@ -1650,17 +1650,21 @@ function extractExpiringRecordSearchCategory(xml) {
   return match ? decodeXml(match[1]).trim().toLowerCase() : "";
 }
 
-function buildConferenceDiscoItemXml(record) {
+function buildConferenceDiscoItemXml(record, viewerCharacterID) {
   const roomName = String(record && record.roomName || "").trim();
   if (!roomName) {
     return "";
   }
 
   const displayName = sanitizeRoomLabel(record.displayName, roomName);
+  const affiliation = viewerCharacterID && roomName.startsWith("player_")
+    ? getAffiliationForCharacter(record, viewerCharacterID)
+    : "";
   return [
     "<item",
     ` jid='${escapeXml(buildConferenceRoomJid(roomName))}'`,
     ` name='${escapeXml(displayName)}'`,
+    affiliation ? ` node='${escapeXml(affiliation)}'` : "",
     "/>",
   ].join("");
 }
@@ -1780,7 +1784,7 @@ function buildConferenceNodeInfoResultXml(client, requestId, node, session) {
   ].join("");
 }
 
-function buildConferenceDiscoItemsResultXml(client, requestId, node, records = []) {
+function buildConferenceDiscoItemsResultXml(client, requestId, node, records = [], viewerCharacterID = 0) {
   const seenRoomNames = new Set();
   const items = [];
   for (const record of records) {
@@ -1789,7 +1793,7 @@ function buildConferenceDiscoItemsResultXml(client, requestId, node, records = [
       continue;
     }
     seenRoomNames.add(roomName);
-    const itemXml = buildConferenceDiscoItemXml(record);
+    const itemXml = buildConferenceDiscoItemXml(record, viewerCharacterID);
     if (itemXml) {
       items.push(itemXml);
     }
@@ -1826,7 +1830,8 @@ function handleConferenceDiscoItemsIq(client, xml) {
 
   sendXml(
     client,
-    buildConferenceDiscoItemsResultXml(client, requestId, node, records),
+    buildConferenceDiscoItemsResultXml(client, requestId, node, records,
+      node === "forme" ? session?.characterID : 0),
   );
 }
 
@@ -2778,10 +2783,14 @@ function handleJoinPresence(client, xml) {
         chatRuntime.joinLocalLsc(session);
       }
     } catch (error) {
-      sendSystemMessageToClient(
-        client,
-        descriptor.normalizedRoomJid,
-        formatChannelAccessError(error, "join"),
+      const [code, condition, type] = error?.code === "password_required" ? [401, "not-authorized", "auth"] :
+        error?.code === "CHANNEL_NOT_FOUND" ? [403, "forbidden", "cancel"] :
+          [407, "registration-required", "auth"];
+      const from = `${descriptor.normalizedRoomJid}/${nick}`;
+      sendXml(client,
+        `<presence type='error' from='${escapeXml(from)}' to='${escapeXml(client.boundJid)}' id='${escapeXml(requestId)}'>` +
+        `<error code='${code}' type='${type}'><${condition} xmlns='urn:ietf:params:xml:ns:xmpp-stanzas'/>` +
+        `<text xmlns='urn:ietf:params:xml:ns:xmpp-stanzas'>${escapeXml(formatChannelAccessError(error, "join"))}</text></error></presence>`,
       );
       return;
     }

@@ -1,6 +1,6 @@
 {
   "schemaVersion": 3,
-  "evejsVersion": "261125.3",
+  "evejsVersion": "261126.2",
   "files": {
     ".dockerignore": {
       "baseSha256": "6ab932ab3781389eace0d2d18525e61671cfa243e976be61310a13406f7e0d71",
@@ -243,9 +243,9 @@
       "subsystem": "gamestore"
     },
     "server/src/network/tcp/index.js": {
-      "baseSha256": "d14bba1f7493b8a980f5e8cddf2a5bcc7b2eefb539b238a7cf5e9057624ee1cd",
-      "sourceSha256": "034e1eb010e80f05fcc789e41e8c182e5eac68fcd3aa24e424b4c28089b59c4e",
-      "overlaySha256": "034e1eb010e80f05fcc789e41e8c182e5eac68fcd3aa24e424b4c28089b59c4e",
+      "baseSha256": "daf6f8530ae2a7b4bc0496a09cda018e6d26fddcc9ea368d584414dfd630f65c",
+      "sourceSha256": "4a192c097fcf7def96a55775438636700566e3911d23b59f7ad6f80505520fac",
+      "overlaySha256": "4a192c097fcf7def96a55775438636700566e3911d23b59f7ad6f80505520fac",
       "subsystem": "platform"
     },
     "server/src/services/_shared/presenceReconciler.js": {
@@ -327,9 +327,9 @@
       "subsystem": "chat-commands"
     },
     "server/src/services/chat/xmppStubServer.js": {
-      "baseSha256": "da32c4a1ac343e05754e23096d4828ea0134371aded81f7270d3282d63453494",
-      "sourceSha256": "1312f069b30c6e42d88354adcbfebaaa69d058b4e2718fb371585779faf38127",
-      "overlaySha256": "1312f069b30c6e42d88354adcbfebaaa69d058b4e2718fb371585779faf38127",
+      "baseSha256": "e7a9058fcef1e451fedeac7205cbe7eaa802dee9087d02dc92712bd9fd6c7df3",
+      "sourceSha256": "59be97edf1553d0237067b22d8e62a8d66c4ef26aceecf793ff1c6957f5fae91",
+      "overlaySha256": "59be97edf1553d0237067b22d8e62a8d66c4ef26aceecf793ff1c6957f5fae91",
       "subsystem": "chat-commands"
     },
     "server/src/services/contracts/contractRuntimeState.js": {
@@ -429,9 +429,9 @@
       "subsystem": "economy-authorities"
     },
     "server/src/services/market/marketProxyService.js": {
-      "baseSha256": "e891eddd25eb50b7cbc1656ae822f7d898fcd8879b9771184d4f01b22b0c3594",
-      "sourceSha256": "296d901a7c840366f3691c661cc9fa160f078f2ebccf3c9b731f73444b34b105",
-      "overlaySha256": "296d901a7c840366f3691c661cc9fa160f078f2ebccf3c9b731f73444b34b105",
+      "baseSha256": "8bc7861617be21a0173c1d2c365b5e8d660eafca99b9f426c69bf67ce3f339a7",
+      "sourceSha256": "51866b779d3a478cf27296b297730af790bd88c7a0c3fbb351c67c4d6d198982",
+      "overlaySha256": "51866b779d3a478cf27296b297730af790bd88c7a0c3fbb351c67c4d6d198982",
       "subsystem": "economy-authorities"
     },
     "server/src/services/mining/miningNpcOperations.js": {
