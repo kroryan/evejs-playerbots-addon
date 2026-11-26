@@ -187,6 +187,19 @@ function isEnabled() {
   return process.env.EVEJS_PLAYER_BOTS_AUTOWORK !== "0" && readState().enabled !== false;
 }
 
+// True while gradual seeding is still filling the roster and the director is
+// set not to assign work meanwhile (the default).
+function isPausedForSeeding() {
+  try {
+    const settings = require("./playerBotConfigurationRuntime").getSettings();
+    if (settings.rosterSeedEnabled !== true || settings.directorWhileSeeding === true) return false;
+    const target = Number(settings.rosterTarget) || 0;
+    return target > 0 && require("./playerBotRuntime").getBotCount() < target;
+  } catch (_) {
+    return false;
+  }
+}
+
 function setEnabled(enabled) {
   const state = readState();
   state.enabled = Boolean(enabled);
@@ -1722,6 +1735,10 @@ async function runDirectorInternal(bots = [], options = {}) {
   summary.resumedForCapacity = resumedCapacityWork.resumed;
   summary.capacityQueued = resumedCapacityWork.queued;
   if (!summary.enabled) return summary;
+  if (isPausedForSeeding()) {
+    summary.pausedForSeeding = true;
+    return summary;
+  }
   const state = readState();
   const now = Date.now();
   for (const characterID of capacityState.queuedColonyCharacterIDs || []) {
@@ -2024,7 +2041,7 @@ async function runDirectorInternal(bots = [], options = {}) {
     if (await budget.checkpoint()) {
       // Another scheduler job may have started work for this pilot while the
       // pass was parked.
-      if (!isEnabled()) break;
+      if (!isEnabled() || isPausedForSeeding()) break;
       if (bot.status === "paused" || bot.autonomyPaused === true || isBusy(bot.characterID)) continue;
     }
     const corporationID = Number((readSharedCharacterRecord(bot.characterID) || {}).corporationID || bot.corporationID) || 0;
@@ -2699,6 +2716,7 @@ module.exports = {
   listQueuedColonySetupAssignments,
   hasActiveWork,
   isEnabled,
+  isPausedForSeeding,
   runDirector,
   setEnabled,
 };

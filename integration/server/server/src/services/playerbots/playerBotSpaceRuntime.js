@@ -735,29 +735,43 @@ function ensureCorporationBotsConnected(corporationID) {
   };
 }
 
+// Runs every 30 seconds over every connected bot, so it uses the same sliced
+// pass as startup and never overlaps itself.
+let corporationReconcile = null;
+
 function reconcileConnectedCorporations() {
-  if (!started || startupConnection) return [];
-  require("./playerBotDirectorRuntime").enforceConcurrentWorkLimit({ skipUpgradeMarketPlanning: true });
-  const corporationIDs = getHumanConnectedCorporationIDs();
-  const presence = reconcileActorConnections({ humanCorporations: corporationIDs });
-  if (require("./playerBotLoadController").getPlayerBotLoadController().shouldPauseLowPriorityWork()) {
-    return [{ ...presence, corporations: corporationIDs.size }];
-  }
-  for (const corporationID of corporationIDs) {
-    try {
-      const director = require("./playerBotDirectorRuntime");
-      if (director.countProductiveBots(corporationID) < 3) {
-        director.ensureMinimumProductiveWork(corporationID).catch((error) => {
-          log.warn(
-            `[PlayerBots] Productive-work recovery failed corp=${corporationID}: ${error.message}`,
-          );
-        });
-      }
-    } catch (error) {
-      log.warn(`[PlayerBots] Corporation work reconciliation failed corp=${corporationID}: ${error.message}`);
+  if (!started || startupConnection) return Promise.resolve([]);
+  if (corporationReconcile) return corporationReconcile;
+  const run = (async () => {
+    require("./playerBotDirectorRuntime").enforceConcurrentWorkLimit({ skipUpgradeMarketPlanning: true });
+    const corporationIDs = getHumanConnectedCorporationIDs();
+    const presence = await reconcileActorConnections({ humanCorporations: corporationIDs, gradual: true });
+    if (!started || require("./playerBotLoadController").getPlayerBotLoadController().shouldPauseLowPriorityWork()) {
+      return [{ ...presence, corporations: corporationIDs.size }];
     }
-  }
-  return [{ ...presence, corporations: corporationIDs.size }];
+    for (const corporationID of corporationIDs) {
+      try {
+        const director = require("./playerBotDirectorRuntime");
+        if (director.countProductiveBots(corporationID) < 3) {
+          director.ensureMinimumProductiveWork(corporationID).catch((error) => {
+            log.warn(
+              `[PlayerBots] Productive-work recovery failed corp=${corporationID}: ${error.message}`,
+            );
+          });
+        }
+      } catch (error) {
+        log.warn(`[PlayerBots] Corporation work reconciliation failed corp=${corporationID}: ${error.message}`);
+      }
+    }
+    return [{ ...presence, corporations: corporationIDs.size }];
+  })().catch((error) => {
+    log.warn(`[PlayerBots] Connected-corporation reconcile failed: ${error.message}`);
+    return [];
+  }).finally(() => {
+    if (corporationReconcile === run) corporationReconcile = null;
+  });
+  corporationReconcile = run;
+  return run;
 }
 
 function describeError(error) {
@@ -1654,6 +1668,7 @@ function start() {
 async function shutdown() {
   started = false;
   startupConnection = null;
+  corporationReconcile = null;
   const deadline = Date.now() + SHUTDOWN_TIMEOUT_MS;
   if (localPresenceTimer) clearInterval(localPresenceTimer);
   localPresenceTimer = null;

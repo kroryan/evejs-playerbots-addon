@@ -378,6 +378,9 @@ function createPlayerBotDashboardRuntime(options = {}) {
   function autoworkStatus(rosterCount) {
     let enabled = true;
     try { enabled = typeof directorAssignments.isEnabled === "function" ? directorAssignments.isEnabled() !== false : true; } catch { enabled = true; }
+    try {
+      if (enabled && typeof directorAssignments.isPausedForSeeding === "function" && directorAssignments.isPausedForSeeding()) enabled = false;
+    } catch { /* keep the director's own state */ }
     let settings = {};
     try { settings = configuration.getSettings() || {}; } catch { settings = {}; }
     const target = Number(settings.rosterTarget) || Number(playerBots.getConfiguredTarget && playerBots.getConfiguredTarget()) || 0;

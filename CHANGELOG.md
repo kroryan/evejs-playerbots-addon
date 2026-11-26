@@ -49,6 +49,22 @@ the Windows launcher package adds a fourth number for its own releases.
   player buy orders and the set of bot owners are kept for a few seconds
   instead of rereading all 5,000 character records per pilot (16%), and the
   mining escort check reads operations without copying them all (13%).
+- **Less steady load from online bots.** A second profile, after the
+  director fixes, showed two costs that grow with the number of bots online.
+  EveJS's 30-second chat presence pass sent each session a Local member list
+  and built every list by scanning all sessions; it now skips playerbot
+  sessions, which have no client to receive it (35% of the time). The
+  add-on's 30-second corporation reconcile walked every connected bot in one
+  pass, and the bot role cache it relied on held 5,000 entries and emptied
+  itself whenever it was full, so with 5,000 bots online it almost never hit
+  (21%). The cache now drops only its oldest entry and has room for the
+  largest roster, and the reconcile runs in short slices.
+- **No new work while the roster seeds.** By default the director now gives
+  no pilot new work until gradual seeding reaches the roster target, so new
+  pilots arrive on a quiet server. Running work finishes as usual. Turn on
+  Settings > Autonomous work > "Work while seeding" (or set
+  `EVEJS_PLAYER_BOTS_DIRECTOR_WHILE_SEEDING=1`) to keep assigning work
+  during seeding.
 - **Large rosters start reliably.** At startup the bot fleet upkeep asked,
   for every candidate pilot, whether it was due online, and each answer
   rebuilt the whole 5,000-pilot connection plan. That held EveJS for over a

@@ -46,6 +46,7 @@ const { createWorkBudget } = require(path.join(base, "playerBotWorkBudget"));
       assignmentAttempts: 0,
       MAX_DIRECTOR_ASSIGNMENT_ATTEMPTS_PER_PASS: 20,
       isEnabled: () => enabled,
+      isPausedForSeeding: () => false,
       budget: {
         checkpoint: async () => {
           await realBudget.checkpoint(true);
