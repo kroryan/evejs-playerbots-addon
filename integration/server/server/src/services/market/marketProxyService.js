@@ -536,7 +536,10 @@ function mapOwnerOrderRow(ownerOrder) {
   const stateCode = mapOwnerOrderStateCode(state);
   const isCorp = Boolean(ownerOrder && ownerOrder.is_corp);
   const ownerID = Number(ownerOrder && ownerOrder.owner_id) || 0;
-  const charID = isCorp ? 0 : ownerID;
+  const escrowRecord = isCorp ? getEscrowRecord(nestedRow.order_id || ownerOrder.order_id) : null;
+  // For corporate orders the daemon owner is the corporation. The escrow
+  // identifies the issuing pilot and the corporation wallet division.
+  const charID = isCorp ? normalizePositiveInteger(escrowRecord?.ownerId, 0) : ownerID;
   const escrow = nestedRow.bid
     ? roundIsk((Number(nestedRow.price) || 0) * (Number(nestedRow.vol_remaining) || 0))
     : 0;
@@ -560,7 +563,7 @@ function mapOwnerOrderRow(ownerOrder) {
     Number(nestedRow.solar_system_id) || 0,
     escrow,
     Number(nestedRow.constellation_id) || 0,
-    1000,
+    isCorp && escrowRecord ? normalizeCorporationWalletKey(escrowRecord.accountKey) : 1000,
     stateCode,
     stateCode === 0 ? null : buildFiletimeLong(lastStateChangeDate || issueDate),
   ];
@@ -1216,16 +1219,35 @@ async function recordCharacterMarketTransaction(characterID, entry = {}) {
   });
 }
 
-// Records a completed trade's transaction-history entry against whichever
-// wallet actually paid/was paid for it - a character's own market
-// transaction list, or (when walletOwner.isCorp) the owning corporation's,
-// so Handle_CorpGetTransactions shows corp-wallet trades too.
-async function recordMarketTransactionForWalletOwner(walletOwner, entry = {}) {
+function marketWalletAccountID(walletOwner) {
+  // Each owner has a personal account or seven corporation divisions. The
+  // native client compares these IDs to find the side and uses keyID for the division.
+  const division = walletOwner.isCorp
+    ? normalizeCorporationWalletKey(walletOwner.accountKey) - CORPORATION_WALLET_KEY_START + 1
+    : 0;
+  return walletOwner.id * 16 + division;
+}
+
+// Record the fill against the wallet that paid or was paid for it.
+async function recordMarketTransactionForWalletOwner(walletOwner, entry, parties, bought) {
   if (walletOwner && walletOwner.isCorp) {
+    const buyerAccountID = marketWalletAccountID(parties.buyerOwner);
+    const sellerWalletAccountID = marketWalletAccountID(parties.sellerOwner);
+    // Preserve both sides when two orders cross through the same wallet division.
+    const sellerAccountID = sellerWalletAccountID === buyerAccountID ? sellerWalletAccountID + 8 : sellerWalletAccountID;
     return appendCorporationMarketTransactionAsync(
       walletOwner.id,
       walletOwner.accountKey,
-      entry,
+      {
+        ...entry,
+        buyerID: parties.buyerCharacterID,
+        sellerID: parties.sellerCharacterID,
+        clientID: bought ? parties.sellerCharacterID : parties.buyerCharacterID,
+        accountID: bought ? buyerAccountID : sellerAccountID,
+        buyerAccountID,
+        sellerAccountID,
+        keyID: walletOwner.accountKey,
+      },
     );
   }
   return recordCharacterMarketTransaction(walletOwner ? walletOwner.id : 0, entry);
@@ -5022,6 +5044,7 @@ async function matchSellOrdersForBuyer({
             `[MarketProxy] Failed to record committed fill ${saga.operationKey}: ${error.message}`,
           );
         }
+        const parties = { buyerCharacterID, buyerOwner: resolvedBuyerOwner, sellerCharacterID, sellerOwner };
         await recordMarketTransactionForWalletOwner(resolvedBuyerOwner, {
           transactionDate: buyerWalletResult && buyerWalletResult.journalEntry
             ? buyerWalletResult.journalEntry.transactionDate
@@ -5038,7 +5061,7 @@ async function matchSellOrdersForBuyer({
             buyerWalletResult && buyerWalletResult.journalEntry
               ? buyerWalletResult.journalEntry.transactionID
               : -1,
-        });
+        }, parties, true);
         await recordMarketTransactionForWalletOwner(sellerOwner, {
           transactionDate: sellerWalletResult && sellerWalletResult.journalEntry
             ? sellerWalletResult.journalEntry.transactionDate
@@ -5055,7 +5078,7 @@ async function matchSellOrdersForBuyer({
             sellerWalletResult && sellerWalletResult.journalEntry
               ? sellerWalletResult.journalEntry.transactionID
               : -1,
-        });
+        }, parties, false);
 
         notifyOwnOrdersChanged(
           sellerCharacterID,
@@ -5088,7 +5111,12 @@ async function matchSellOrdersForBuyer({
             buyerWalletResult && buyerWalletResult.journalEntry
               ? buyerWalletResult.journalEntry.transactionID
               : -1,
-        });
+        }, {
+          buyerCharacterID,
+          buyerOwner: resolvedBuyerOwner,
+          sellerCharacterID: marketCounterpartyOwnerID,
+          sellerOwner: { id: marketCounterpartyOwnerID, isCorp: false },
+        }, true);
       }
     } catch (error) {
       throw error;
@@ -5833,6 +5861,7 @@ async function matchBuyOrdersForSeller({
             `[MarketProxy] Failed to record committed fill ${saga.operationKey}: ${error.message}`,
           );
         }
+        const parties = { buyerCharacterID, buyerOwner, sellerCharacterID, sellerOwner: resolvedSellerOwner };
         await recordMarketTransactionForWalletOwner(resolvedSellerOwner, {
           transactionDate: sellerWalletResult && sellerWalletResult.journalEntry
             ? sellerWalletResult.journalEntry.transactionDate
@@ -5848,7 +5877,7 @@ async function matchBuyOrdersForSeller({
             sellerWalletResult && sellerWalletResult.journalEntry
               ? sellerWalletResult.journalEntry.transactionID
               : -1,
-        });
+        }, parties, false);
         await recordMarketTransactionForWalletOwner(buyerOwner, {
           typeID,
           quantity: fillableQuantity,
@@ -5858,7 +5887,7 @@ async function matchBuyOrdersForSeller({
           sellerID: sellerWalletID,
           clientID: sellerWalletID,
           journalRefID: -1,
-        });
+        }, parties, true);
       } finally {
         if (sagaResult.sellerInventoryChanges.length > 0) {
           notifyInventoryChangesToCharacter(
@@ -5960,7 +5989,12 @@ async function matchBuyOrdersForSeller({
           sellerWalletResult && sellerWalletResult.journalEntry
             ? sellerWalletResult.journalEntry.transactionID
             : -1,
-      });
+      }, {
+        buyerCharacterID: stationMarketOwnerID,
+        buyerOwner: { id: stationMarketOwnerID, isCorp: false },
+        sellerCharacterID,
+        sellerOwner: resolvedSellerOwner,
+      }, false);
     } finally {
       if (sagaResult.sellerInventoryChanges.length > 0) {
         notifyInventoryChangesToCharacter(
@@ -7995,7 +8029,7 @@ class MarketProxyService extends BaseService {
       }
 
       notifyOwnOrdersChanged(
-        ownerID,
+        orderIsCorp ? getNumericSessionValue(session, ["charid", "characterID"]) : ownerID,
         [{
           ...order,
           row: {

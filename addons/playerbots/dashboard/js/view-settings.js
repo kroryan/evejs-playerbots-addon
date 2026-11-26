@@ -106,6 +106,7 @@ function pageHtml(effectiveAutowork, roster) {
       <div class="panel-body"><div class="form-grid">
         ${checkHtml("autoworkEnabled", "Autonomous work", `The director hands out work on its own. Now ${effectiveAutowork ? "on" : "off"}.`)}
         ${checkHtml("rosterSeedEnabled", "Gradual roster seeding", "Creates pilots in small batches until the roster target is reached.")}
+        ${Object.hasOwn(saved, "directorWhileSeeding") ? checkHtml("directorWhileSeeding", "Work while seeding", "When off, the director gives no pilot new work until seeding reaches the roster target.") : ""}
       </div>
       <div id="seed-status" class="notice info" style="margin:14px 0 0"></div></div></div>
     <div class="panel"><div class="panel-head"><div><h2>${icon("users")}Population</h2><p>How many pilots exist, how many are online, and where they may gather</p></div></div><div class="panel-body"><div class="form-grid">${group("population")}</div></div></div>
@@ -136,7 +137,7 @@ function bodyFromForm(form) {
     if (convert) body[convert[0]] = Math.round(value * convert[1]);
     else body[name] = value;
   }
-  for (const key of ["autoworkEnabled", "rosterSeedEnabled", "botFleetsEnabled"]) {
+  for (const key of ["autoworkEnabled", "rosterSeedEnabled", "directorWhileSeeding", "botFleetsEnabled"]) {
     if (!isLocked(key) && Object.hasOwn(saved, key)) body[key] = form.elements.namedItem(key).checked;
   }
   return body;
@@ -228,7 +229,10 @@ async function load(fresh) {
     saved = { ...saved, ...defaults };
     const form = $("settings-form");
     for (const field of FIELDS) if (!isLocked(settingKey(field))) form.elements.namedItem(field[0]).value = String(toForm(defaults, field) ?? "");
-    for (const key of ["autoworkEnabled", "rosterSeedEnabled"]) if (!isLocked(key)) form.elements.namedItem(key).checked = defaults[key] === true;
+    for (const key of ["autoworkEnabled", "rosterSeedEnabled", "directorWhileSeeding"]) {
+      const input = form.elements.namedItem(key);
+      if (input && !isLocked(key)) input.checked = defaults[key] === true;
+    }
     form.requestSubmit();
   });
   $("names-template").addEventListener("click", () => {

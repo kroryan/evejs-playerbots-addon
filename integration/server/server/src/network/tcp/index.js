@@ -479,6 +479,7 @@ module.exports = function (serviceManager) {
 
   let shutdownPromise = null;
   let militiaSettlementTimer = null;
+  let mercenaryActivityTimer = null;
   let unregisterGameRuntimeShutdownHook = null;
   let unregisterSpaceTransitionShutdownHook = null;
   let unregisterShutdownHook = null;
@@ -494,6 +495,7 @@ module.exports = function (serviceManager) {
     shutdown() {
       if (shutdownPromise) return shutdownPromise;
       clearInterval(militiaSettlementTimer);
+      clearInterval(mercenaryActivityTimer);
       // Log every pilot off now, while the store still takes writes. A
       // destroyed socket's close event fires only after the store has shut
       // down, which lost the ship's position and the logoff state.
@@ -595,6 +597,14 @@ module.exports = function (serviceManager) {
         };
         settleMilitias();
         militiaSettlementTimer = setInterval(settleMilitias, 1000).unref();
+        const { settleMercenaryActivityTimers } = require("../../services/sovereignty/mercenaryDenState");
+        mercenaryActivityTimer = setInterval(() => {
+          try {
+            settleMercenaryActivityTimers();
+          } catch (error) {
+            log.warn(`[MercenaryDen] Pending activity settlement: ${error.message}`);
+          }
+        }, 1000).unref();
         resolve(runtime);
       } catch (error) {
         if (unregisterShutdownHook) {

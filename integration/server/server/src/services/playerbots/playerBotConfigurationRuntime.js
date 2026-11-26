@@ -37,6 +37,9 @@ function defaults() {
     rosterCeiling: envInteger("EVEJS_PLAYER_BOTS_ROSTER_CEILING", MAX_ROSTER, 30, MAX_ROSTER),
     maxOnline,
     rosterSeedEnabled: process.env.EVEJS_PLAYER_BOTS_ROSTER_SEED_ENABLED === "1",
+    // Off: while seeding is filling the roster, the director gives no pilot
+    // new work, so new pilots arrive on a quiet server.
+    directorWhileSeeding: process.env.EVEJS_PLAYER_BOTS_DIRECTOR_WHILE_SEEDING === "1",
     rosterSeedBatchSize: envInteger("EVEJS_PLAYER_BOTS_ROSTER_SEED_BATCH_SIZE", 5, 1, ROSTER_SEED_SAFETY_LIMITS.batchSize),
     rosterSeedIntervalMs: envInteger("EVEJS_PLAYER_BOTS_ROSTER_SEED_INTERVAL_MS", 15_000, 5_000, 5 * 60 * 1000),
     rosterSeedMaxEventLoopP95Ms: envInteger("EVEJS_PLAYER_BOTS_ROSTER_SEED_MAX_EVENT_LOOP_P95_MS", 100, 25, ROSTER_SEED_SAFETY_LIMITS.eventLoopP95Ms),
@@ -116,6 +119,7 @@ function getSettings() {
   }
   if (typeof stored.autoworkEnabled === "boolean") settings.autoworkEnabled = stored.autoworkEnabled;
   if (typeof stored.rosterSeedEnabled === "boolean") settings.rosterSeedEnabled = stored.rosterSeedEnabled;
+  if (typeof stored.directorWhileSeeding === "boolean") settings.directorWhileSeeding = stored.directorWhileSeeding;
   if (typeof stored.botFleetsEnabled === "boolean") settings.botFleetsEnabled = stored.botFleetsEnabled;
   const locked = launcherOverrides();
   Object.assign(settings, locked);
@@ -149,7 +153,7 @@ function updateSettings(patch = {}) {
   if (!patch || typeof patch !== "object" || Array.isArray(patch)) {
     return { success: false, message: "Settings must be sent as a JSON object." };
   }
-  const booleanSettings = new Set(["autoworkEnabled", "rosterSeedEnabled", "botFleetsEnabled"]);
+  const booleanSettings = new Set(["autoworkEnabled", "rosterSeedEnabled", "directorWhileSeeding", "botFleetsEnabled"]);
   const unknown = Object.keys(patch).filter((key) => !Object.hasOwn(BOUNDS, key) && !booleanSettings.has(key));
   if (unknown.length) return { success: false, message: `Unknown playerbot settings: ${unknown.join(", ")}.` };
   const next = { ...getSettings() };

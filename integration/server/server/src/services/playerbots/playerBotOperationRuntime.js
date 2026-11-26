@@ -3611,7 +3611,13 @@ function startColony(botQuery) {
 // Collect an already launched PI container using normal movement and inventory services.
 function nextPlanetaryLaunch(bot) {
   const items = require("../inventory/itemStore");
-  return require("../planet/planetRuntimeStore").listLaunchesForCharacter(bot.characterID)
+  const planetRuntime = require("../planet/planetRuntimeStore");
+  // The director asks this for every candidate pilot. The planning view is
+  // indexed by owner; the item checks below confirm each launch is still there.
+  const list = typeof planetRuntime.listLaunchesForCharacterForPlanning === "function"
+    ? planetRuntime.listLaunchesForCharacterForPlanning
+    : planetRuntime.listLaunchesForCharacter;
+  return list(bot.characterID)
     .filter((launch) => Number(launch.itemID) > 0 && Number(launch.itemID) !== Number(launch.launchID))
     .filter((launch) => items.findItemById(Number(launch.itemID)) &&
       items.listCharacterItems(bot.characterID, { locationID: Number(launch.itemID) }).length > 0)

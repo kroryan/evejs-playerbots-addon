@@ -148,7 +148,22 @@ function querySellOffers(database, typeID, regionIDs) {
   })).filter((row) => row.stationID && row.price > 0 && row.quantity > 0);
 }
 
+// Bot characters and corporations change rarely, and building the set reads
+// every bot's character record. The director asks for it once per candidate
+// pilot, so keep it briefly. Callers must not modify the returned set.
+const BOT_OWNER_IDS_TTL_MS = 15_000;
+let botOwnerIDsCache = null;
+let botOwnerIDsCachedAt = 0;
+
 function getBotOwnerIDs() {
+  const now = Date.now();
+  if (botOwnerIDsCache && now - botOwnerIDsCachedAt < BOT_OWNER_IDS_TTL_MS) return botOwnerIDsCache;
+  botOwnerIDsCache = buildBotOwnerIDs();
+  botOwnerIDsCachedAt = now;
+  return botOwnerIDsCache;
+}
+
+function buildBotOwnerIDs() {
   const bots = require("./playerBotRuntime").listBots();
   const owners = new Set();
   for (const bot of bots) {
@@ -174,12 +189,33 @@ function isJitaStation(stationID) {
   }
 }
 
-// Open buy orders placed by players (not bots) outside Jita.
+// Open buy orders placed by players (not bots) outside Jita. Planning asks
+// the same question for many pilots in a row, so answers are kept for a few
+// seconds; a sale still checks the live order before it fills.
+const PLAYER_BUY_ORDERS_TTL_MS = 5_000;
+const playerBuyOrdersCache = new Map();
+
 function listPlayerBuyOrders(limit = 50, typeID = null, regionID = null) {
+  const normalizedLimit = Math.max(1, Math.trunc(Number(limit) || 50));
+  const normalizedTypeID = Math.trunc(Number(typeID)) || 0;
+  const normalizedRegionID = Math.trunc(Number(regionID)) || 0;
+  const key = `${normalizedLimit}:${normalizedTypeID}:${normalizedRegionID}`;
+  const now = Date.now();
+  let cached = playerBuyOrdersCache.get(key);
+  if (!cached || now - cached.at >= PLAYER_BUY_ORDERS_TTL_MS) {
+    if (playerBuyOrdersCache.size > 2_000) {
+      for (const [cachedKey, entry] of playerBuyOrdersCache) {
+        if (now - entry.at >= PLAYER_BUY_ORDERS_TTL_MS) playerBuyOrdersCache.delete(cachedKey);
+      }
+    }
+    cached = { at: now, rows: queryPlayerBuyOrders(normalizedLimit, normalizedTypeID, normalizedRegionID) };
+    playerBuyOrdersCache.set(key, cached);
+  }
+  return cached.rows.map((row) => ({ ...row }));
+}
+
+function queryPlayerBuyOrders(normalizedLimit, normalizedTypeID, normalizedRegionID) {
   try {
-    const normalizedLimit = Math.max(1, Math.trunc(Number(limit) || 50));
-    const normalizedTypeID = Math.trunc(Number(typeID)) || 0;
-    const normalizedRegionID = Math.trunc(Number(regionID)) || 0;
     const typeClause = normalizedTypeID > 0 ? " AND type_id = ?" : "";
     const regionClause = normalizedRegionID > 0 ? " AND region_id = ?" : "";
     const botOwners = [...getBotOwnerIDs()];

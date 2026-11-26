@@ -617,11 +617,16 @@ async function bootWorld(options = {}) {
     }
     if (stages.startTCP) {
       world.tcpServer = await startTCPServer(serviceManager);
-      const actorRecovery = playerBotSpaceRuntime.start();
-      log.info(
-        `[PlayerBots] Space actor recovery complete attached=${actorRecovery.attachedCount} ` +
-          `active=${actorRecovery.activeActors} failed=${actorRecovery.failedCount}.`,
-      );
+      // Connecting a large roster takes a while; it runs in the background
+      // so the server keeps its database leases and answers health checks.
+      playerBotSpaceRuntime.start().then((actorRecovery) => {
+        log.info(
+          `[PlayerBots] Space actor recovery complete attached=${actorRecovery.attachedCount} ` +
+            `active=${actorRecovery.activeActors} failed=${actorRecovery.failedCount}.`,
+        );
+      }).catch((error) => {
+        log.error(`[PlayerBots] Space actor recovery failed: ${error.message}`);
+      });
       if (playerBotAddonApiRuntime) {
         if (nativePlayerbots) {
           const driver = nativePlayerbots.startDriver(config.imageServerUrl);

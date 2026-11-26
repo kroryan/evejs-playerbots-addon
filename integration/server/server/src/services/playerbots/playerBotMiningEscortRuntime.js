@@ -118,7 +118,10 @@ function findPendingMiningEscortRequest(bot, options = {}) {
     return null;
   }
   const operationRuntime = require("./playerBotOperationRuntime");
-  const activeOperations = operationRuntime.listActiveOperations();
+  // Read-only: the shared records avoid copying every operation for each
+  // security pilot the director considers.
+  const activeOperations = typeof operationRuntime.listActiveOperationRecords === "function"
+    ? operationRuntime.listActiveOperationRecords() : operationRuntime.listActiveOperations();
   const recentMiningOperations = activeOperations.filter((miningOperation) => {
     if (miningOperation.kind !== "mine" || !["active", "holding"].includes(miningOperation.status) ||
         miningOperation.stage !== "mining" || Number(miningOperation.lastVisiblePirateNpcCount) <= 0 ||

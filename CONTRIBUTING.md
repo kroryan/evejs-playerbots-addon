@@ -17,7 +17,7 @@ project's long-form plan and test evidence in
 | `addons/playerbots/install.py`, `verify.py`, `rollback.py` | Installer (Docker and native, interactive when run without options), checker and rollback; copied to the package root at build time |
 | `install.cmd` | Double-click launcher for the installer on Windows |
 | `install.py`, `verify.py`, `rollback.py`, `compose.override.yaml` | The same files at the repository root, so a git checkout installs like an unpacked ZIP. Keep them identical to `addons/playerbots/`; a test checks this. |
-| `integration/server/` | The EveJS server files the add-on installs over a stock 261125.3 tree |
+| `integration/server/` | The EveJS server files the add-on installs over a stock 261126.2 tree |
 | `integration/manifest.json` | Stock and installed SHA-256 for every managed file, and the add-on file hashes |
 | `windows-native/` | The EVEJS Launcher package: mod manifest, installer helper, native driver, multicore TCP file, release history |
 | `tools/playerbots/` | Package builders |
@@ -56,7 +56,7 @@ node --test tests/*.test.cjs
 ```
 
 Most suites load single server files with stubbed dependencies and need
-nothing else. A few need a stock EveJS 261125.3 checkout and report as
+nothing else. A few need a stock EveJS 261126.2 checkout and report as
 skipped without one:
 
 - Local defense: set `EVEJS_ROOT` to a compatible checkout. To run only that
@@ -97,7 +97,7 @@ the Windows version, copy the released package's `overlay.json` into
 history to upgrade earlier installs in place. Commit the rebuilt ZIPs with the
 source change, and don't call a source-only commit an installable release.
 
-`build-addon-package.py --compat-root <stock EveJS 261125.3>` still works as
+`build-addon-package.py --compat-root <stock EveJS 261126.2>` still works as
 before. It re-reads every stock hash from that checkout instead of trusting
 the manifest; use it when moving to a new EveJS version.
 

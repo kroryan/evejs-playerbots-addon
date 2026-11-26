@@ -376,7 +376,9 @@ function createBotSession(bot, character = getCharacterRecord(bot.characterID)) 
 // minute; a change of corporation or docking location always reads again.
 // EveJS still checks persisted authority when a corporation action runs.
 const BOT_ROLE_STATE_REUSE_MS = 60_000;
-const BOT_ROLE_STATE_MAX_ENTRIES = 5_000;
+// Room for the largest roster: a full cache used to be cleared on the next
+// insert, so with 5,000 bots online nearly every lookup missed.
+const BOT_ROLE_STATE_MAX_ENTRIES = 20_000;
 const botRoleStateCache = new Map();
 
 function readBotCorporationRoleState(corporationID, characterID, record) {
@@ -388,7 +390,10 @@ function readBotCorporationRoleState(corporationID, characterID, record) {
     return cached.roleState;
   }
   const roleState = getCorporationSessionRoleState(corporationID, characterID);
-  if (botRoleStateCache.size >= BOT_ROLE_STATE_MAX_ENTRIES) botRoleStateCache.clear();
+  botRoleStateCache.delete(characterID);
+  if (botRoleStateCache.size >= BOT_ROLE_STATE_MAX_ENTRIES) {
+    botRoleStateCache.delete(botRoleStateCache.keys().next().value);
+  }
   botRoleStateCache.set(characterID, { corporationID, locationKey, readAtMs: now, roleState });
   return roleState;
 }

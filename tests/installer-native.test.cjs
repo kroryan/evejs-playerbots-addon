@@ -24,11 +24,11 @@ function setup() {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "playerbots-native-"));
   const evejs = path.join(root, "evejs");
   for (const dir of ["server", "docker", "config"]) fs.mkdirSync(path.join(evejs, dir), { recursive: true });
-  fs.writeFileSync(path.join(evejs, "package.json"), JSON.stringify({ version: "261125.3" }));
-  fs.writeFileSync(path.join(evejs, "server/package.json"), JSON.stringify({ version: "261125.3" }));
+  fs.writeFileSync(path.join(evejs, "package.json"), JSON.stringify({ version: "261126.2" }));
+  fs.writeFileSync(path.join(evejs, "server/package.json"), JSON.stringify({ version: "261126.2" }));
   fs.writeFileSync(path.join(evejs, "docker/entrypoint.sh"), "#!/bin/sh\n");
   fs.writeFileSync(path.join(evejs, "compose.yaml"), "services: {}\n");
-  fs.writeFileSync(path.join(evejs, "config/version.json"), JSON.stringify({ evejsVersion: "261125.3" }));
+  fs.writeFileSync(path.join(evejs, "config/version.json"), JSON.stringify({ evejsVersion: "261126.2" }));
   fs.writeFileSync(path.join(evejs, "config/server.json"), JSON.stringify({ network: { serverPort: 26000 } }));
   const log = path.join(root, "calls.log");
   const bin = path.join(root, "bin");
@@ -150,14 +150,14 @@ test("the real launcher helper accepts the installer's request", () => {
   // stop on the fake folder's missing EveJS files instead.
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "playerbots-helper-"));
   fs.mkdirSync(path.join(root, "evejs/config"), { recursive: true });
-  fs.writeFileSync(path.join(root, "evejs/config/version.json"), JSON.stringify({ evejsVersion: "261125.3" }));
+  fs.writeFileSync(path.join(root, "evejs/config/version.json"), JSON.stringify({ evejsVersion: "261126.2" }));
   const requestFile = path.join(root, "request.json");
   const resultFile = path.join(root, "result.json");
   fs.writeFileSync(requestFile, JSON.stringify({
     protocol: "evejs_launcher_mod_v1", requestId: "test", action: "install", profile: null,
     runtime: { backend: "native", evejsRoot: path.join(root, "evejs") }, mod: { id: "evejs-playerbots-native" },
   }));
-  const overlay = { version: "261125.3", files: {}, multicore: { tcp: {}, dependencies: [] } };
+  const overlay = { version: "261126.2", files: {}, multicore: { tcp: {}, dependencies: [] } };
   const helper = path.join(repo, "windows-native/helper.cjs");
   const sandboxRequire = (id) => (id === "./overlay.json" ? overlay : require(id));
   const fakeProcess = { argv: ["node", helper, "--request", requestFile, "--result", resultFile],

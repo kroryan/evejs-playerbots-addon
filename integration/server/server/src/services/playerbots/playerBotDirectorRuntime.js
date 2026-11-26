@@ -37,7 +37,11 @@ const MAX_CAPACITY_RESUMES_PER_PASS = 20;
 const MAX_DIRECTOR_ASSIGNMENT_ATTEMPTS_PER_PASS = 20;
 // A pass stops yielding after this much time parked, so a saturated event
 // loop cannot stretch one pass across minutes.
-const MAX_DIRECTOR_PASS_PARKED_MS = 2_000;
+// 0: a director pass keeps yielding however long it has been parked. A limit
+// made a busy server stop yielding after a few seconds, so the rest of the
+// pass (minutes with a large roster) ran as one block and EveJS stopped
+// answering clients, the dashboard and the add-on.
+const MAX_DIRECTOR_PASS_PARKED_MS = 0;
 // Refit a small capsule cohort per pass so recovery buys never create a market
 // burst. Deferred/existing recoveries do not consume this start budget.
 const MAX_CAPSULE_RECOVERIES_PER_PASS = 20;
@@ -181,6 +185,19 @@ function saveState(state) {
 
 function isEnabled() {
   return process.env.EVEJS_PLAYER_BOTS_AUTOWORK !== "0" && readState().enabled !== false;
+}
+
+// True while gradual seeding is still filling the roster and the director is
+// set not to assign work meanwhile (the default).
+function isPausedForSeeding() {
+  try {
+    const settings = require("./playerBotConfigurationRuntime").getSettings();
+    if (settings.rosterSeedEnabled !== true || settings.directorWhileSeeding === true) return false;
+    const target = Number(settings.rosterTarget) || 0;
+    return target > 0 && require("./playerBotRuntime").getBotCount() < target;
+  } catch (_) {
+    return false;
+  }
 }
 
 function setEnabled(enabled) {
@@ -1718,6 +1735,10 @@ async function runDirectorInternal(bots = [], options = {}) {
   summary.resumedForCapacity = resumedCapacityWork.resumed;
   summary.capacityQueued = resumedCapacityWork.queued;
   if (!summary.enabled) return summary;
+  if (isPausedForSeeding()) {
+    summary.pausedForSeeding = true;
+    return summary;
+  }
   const state = readState();
   const now = Date.now();
   for (const characterID of capacityState.queuedColonyCharacterIDs || []) {
@@ -2020,7 +2041,7 @@ async function runDirectorInternal(bots = [], options = {}) {
     if (await budget.checkpoint()) {
       // Another scheduler job may have started work for this pilot while the
       // pass was parked.
-      if (!isEnabled()) break;
+      if (!isEnabled() || isPausedForSeeding()) break;
       if (bot.status === "paused" || bot.autonomyPaused === true || isBusy(bot.characterID)) continue;
     }
     const corporationID = Number((readSharedCharacterRecord(bot.characterID) || {}).corporationID || bot.corporationID) || 0;
@@ -2695,6 +2716,7 @@ module.exports = {
   listQueuedColonySetupAssignments,
   hasActiveWork,
   isEnabled,
+  isPausedForSeeding,
   runDirector,
   setEnabled,
 };

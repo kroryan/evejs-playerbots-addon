@@ -4846,12 +4846,43 @@ function listLaunchesForCharacter(ownerID) {
   }
 
   const state = readState({ repair: true });
+  // Match before normalizing: the store keeps every launch, collected ones
+  // included, and normalizing them all on each call was most of the cost.
   return Object.values(state.launchesByID)
-    .map(normalizeLaunchRecord)
     .filter((launch) => (
-      normalizeInteger(launch && launch.ownerID, 0) === normalizedOwnerID &&
-      launch.deleted !== true
-    ));
+      isPlainObject(launch) &&
+      launch.deleted !== true &&
+      normalizeInteger(launch.ownerID, 0) === normalizedOwnerID
+    ))
+    .map(normalizeLaunchRecord);
+}
+
+// Planning-only view for callers that ask about many characters in a row and
+// re-check what they find (the playerbots director). Up to
+// LAUNCH_OWNER_INDEX_TTL_MS old; client-facing code uses
+// listLaunchesForCharacter.
+const LAUNCH_OWNER_INDEX_TTL_MS = 2_000;
+let launchOwnerIndex = null;
+let launchOwnerIndexBuiltAt = 0;
+
+function listLaunchesForCharacterForPlanning(ownerID) {
+  const normalizedOwnerID = normalizeInteger(ownerID, 0);
+  if (normalizedOwnerID <= 0) {
+    return [];
+  }
+  const now = Date.now();
+  if (!launchOwnerIndex || now - launchOwnerIndexBuiltAt > LAUNCH_OWNER_INDEX_TTL_MS) {
+    launchOwnerIndex = new Map();
+    for (const launch of Object.values(readState({ repair: true }).launchesByID)) {
+      if (!isPlainObject(launch) || launch.deleted === true) continue;
+      const launchOwnerID = normalizeInteger(launch.ownerID, 0);
+      if (launchOwnerID <= 0) continue;
+      if (!launchOwnerIndex.has(launchOwnerID)) launchOwnerIndex.set(launchOwnerID, []);
+      launchOwnerIndex.get(launchOwnerID).push(launch);
+    }
+    launchOwnerIndexBuiltAt = now;
+  }
+  return (launchOwnerIndex.get(normalizedOwnerID) || []).map(normalizeLaunchRecord);
 }
 
 // Recovery code must be able to distinguish "no launch was committed" from a
@@ -5240,6 +5271,7 @@ module.exports = {
   listColoniesForPlanet,
   restartExtractorsForCharacter,
   listLaunchesForCharacter,
+  listLaunchesForCharacterForPlanning,
   findLaunchesForCharacterOnPlanetSince,
   getNetworkEditReplay,
   cleanupExpiredLaunches,

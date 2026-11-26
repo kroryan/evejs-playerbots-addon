@@ -3,8 +3,14 @@
 Newest first. The Docker add-on keeps the upstream version number (0.2.152);
 the Windows launcher package adds a fourth number for its own releases.
 
-## Unreleased: EveJS 261125.3 and a dashboard that keeps up
+## Unreleased: EveJS 261126.2 and a dashboard that keeps up
 
+- **Works with EveJS 261126.2** (was 261125.3). Three server files the
+  add-on replaces changed upstream (`network/tcp/index.js`,
+  `chat/xmppStubServer.js`, `market/marketProxyService.js`) and merged without
+  conflicts. Native package 0.2.152.18. Saves already on 261125.3 need no
+  conversion; EveJS 261126.2's own upgrade now also handles the far drone
+  target points and renews its lock on large saves.
 - **Works with EveJS 261125.3** (was 261115.2). The 34 server files whose
   stock version changed were merged onto the new versions; see the pull
   request for the hand-resolved ones. EveJS 261125.3 needs Node.js 26, so the
@@ -38,6 +44,53 @@ the Windows launcher package adds a fourth number for its own releases.
   (`launchOperationReceiptsByKey`) kept in `planetRuntimeState`. The add-on no
   longer writes either; launch receipts, which stop a retried launch from
   firing twice, are now kept in memory until EveJS restarts.
+- **EveJS keeps answering while the director plans.** With a 5,000-pilot
+  roster the dashboard timed out almost all the time, and so did the add-on's
+  own calls. A CPU profile of the live server showed 85% of its time in the
+  director pass, which stopped yielding once it had been parked for 2 seconds
+  in total. On a busy server that came within seconds, and the rest of the
+  pass ran as one block of about 5 minutes. Passes now keep yielding to the
+  rest of EveJS. Each pilot's turn is also much cheaper: the PI collection
+  check no longer copies every planet launch ever made (45% of the time),
+  player buy orders and the set of bot owners are kept for a few seconds
+  instead of rereading all 5,000 character records per pilot (16%), and the
+  mining escort check reads operations without copying them all (13%).
+- **No long freeze from site upkeep after a restart.** The pass that removes
+  the seeded sites of unloaded systems purged up to 500 sites in one call, and
+  EveJS scans every item for each purged site. Right after a restart every
+  unloaded system's sites qualify at once, so the first pass held the server
+  for 45 to 55 seconds; EveJS 261126.2 then lost its database lease and exited
+  ("database is locked"). A pass now purges five sites at a time for at most a
+  quarter of a second, and comes back every 10 seconds instead of every minute
+  while sites are still waiting.
+- **Less steady load from online bots.** A second profile, after the
+  director fixes, showed two costs that grow with the number of bots online.
+  EveJS's 30-second chat presence pass sent each session a Local member list
+  and built every list by scanning all sessions; it now skips playerbot
+  sessions, which have no client to receive it (35% of the time). The
+  add-on's 30-second corporation reconcile walked every connected bot in one
+  pass, and the bot role cache it relied on held 5,000 entries and emptied
+  itself whenever it was full, so with 5,000 bots online it almost never hit
+  (21%). The cache now drops only its oldest entry and has room for the
+  largest roster, and the reconcile runs in short slices.
+- **No new work while the roster seeds.** By default the director now gives
+  no pilot new work until gradual seeding reaches the roster target, so new
+  pilots arrive on a quiet server. Running work finishes as usual. Turn on
+  Settings > Autonomous work > "Work while seeding" (or set
+  `EVEJS_PLAYER_BOTS_DIRECTOR_WHILE_SEEDING=1`) to keep assigning work
+  during seeding.
+- **Large rosters start reliably.** At startup the bot fleet upkeep asked,
+  for every candidate pilot, whether it was due online, and each answer
+  rebuilt the whole 5,000-pilot connection plan. That held EveJS for over a
+  minute just after its scheduler started, its startup calls timed out, and
+  it exited ("Authority scheduler command schedule ... timed out"). The plan
+  is now built once and reused for a few seconds.
+- **Large rosters no longer crash EveJS at startup.** EveJS connected every
+  online bot in one pass before it did anything else. With 5,000 bots online
+  that held the server for about 15 minutes; EveJS 261125.3 then lost its
+  database lease and stopped ("persistence owner lease lost", "database is
+  locked"). Bots now connect in short batches in the background, and the
+  server answers health checks and keeps its leases meanwhile.
 - **Bots no longer repeat empty sales.** A pilot holding goods with no buy
   order and no reference price ran a sale that sold and listed nothing, and the
   director gave it the same sale again at once. One live save had 156,635 such
