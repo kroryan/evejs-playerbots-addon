@@ -382,7 +382,6 @@ function normalizeMarketTransactionEntry(entry = {}) {
   const transactionID = Number(entry.transactionID);
   return {
     transactionID: Number.isFinite(transactionID) ? Math.trunc(transactionID) : getTransactionID(),
-    orderID: Math.max(0, Math.trunc(Number(entry.orderID) || 0)),
     transactionDate: normalizeFileTimeString(entry.transactionDate),
     typeID: Math.max(0, Math.trunc(Number(entry.typeID) || 0)),
     quantity: Math.max(0, Math.trunc(Number(entry.quantity) || 0)),

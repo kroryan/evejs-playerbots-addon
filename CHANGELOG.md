@@ -21,6 +21,13 @@ the Windows launcher package adds a fourth number for its own releases.
   twice the page's default refresh, so most refreshes showed old numbers. It
   now keeps one for 5 seconds, and longer only when building it is expensive
   (20 times its build time, at most 30 seconds).
+- **Saves upgrade to 261125.3.** Earlier releases stored an `orderID` on
+  every wallet market transaction. EveJS 261125.3's save upgrade rejects that
+  field ("Invalid character_market_transactions field or shape"), and its new
+  schema would refuse such writes afterwards. The add-on no longer stores it.
+  Before running the EveJS 261125.3 update on an existing save, stop the
+  server and run `tools/playerbots/strip-transaction-order-ids.py` on the
+  `gamestore.sqlite` (Docker: in the `evejs-data` volume) to remove the field.
 - **Bots no longer repeat empty sales.** A pilot holding goods with no buy
   order and no reference price ran a sale that sold and listed nothing, and the
   director gave it the same sale again at once. One live save had 156,635 such

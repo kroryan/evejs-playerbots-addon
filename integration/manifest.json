@@ -256,8 +256,8 @@
     },
     "server/src/services/account/walletState.js": {
       "baseSha256": "67667c35ac1fb4c2d97f8162e6a27d903744a7213c334cafc766a06b2be8833a",
-      "sourceSha256": "1f5d91a2f9e32fb94a83bd8aed564f2ebd4e83f25c9fc8987736bc5370f18d95",
-      "overlaySha256": "1f5d91a2f9e32fb94a83bd8aed564f2ebd4e83f25c9fc8987736bc5370f18d95",
+      "sourceSha256": "b90208c0f2f5b82d55e031a5b1d875e3fda38dc3782d9ba3858988c8f2bb8e0b",
+      "overlaySha256": "b90208c0f2f5b82d55e031a5b1d875e3fda38dc3782d9ba3858988c8f2bb8e0b",
       "subsystem": "economy-authorities"
     },
     "server/src/services/career/careerEventLedger.js": {
