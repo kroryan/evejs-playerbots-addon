@@ -2487,8 +2487,9 @@ async function runDirectorInternal(bots = [], options = {}) {
       summary.assigned += 1;
       if (assignment.kind === "relocate") activeRelocations += 1;
       else summary.active += 1;
-      if (assignment.kind !== "relocate" && systemID) {
-        workingBySystem.set(systemID, (workingBySystem.get(systemID) || 0) + 1);
+      const assignedSystemID = botSystemIDs.get(Number(bot.characterID)) || 0;
+      if (assignment.kind !== "relocate" && assignedSystemID) {
+        workingBySystem.set(assignedSystemID, (workingBySystem.get(assignedSystemID) || 0) + 1);
       }
       if (assignment.kind === "colony") activeColonySetups += 1;
       if (assignment.kind === "agent-mission") activeAgentMissions += 1;
