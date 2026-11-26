@@ -457,8 +457,31 @@ function findNearestWarBase(bot, maxHops = 20) {
     candidates.push({ success: true, mode: "war", systemID, stationID,
       opponentCharacterID: characterID, hops: route.hops, risk: route.risk });
   }
-  candidates.sort((left, right) => left.hops - right.hops ||
+  // Territory Map: opponents in systems the bot's corporation contests come
+  // first; with none online, patrol the nearest contested system.
+  let contested = new Set();
+  try {
+    const corporationID = normalizeID((characterState.getCharacterRecord(bot.characterID) || {}).corporationID);
+    contested = new Set(require("./playerBotTerritoryClaimsRuntime").getContestedSystemsForCorporation(corporationID));
+  } catch (_) { contested = new Set(); }
+  candidates.sort((left, right) => Number(contested.has(right.systemID)) - Number(contested.has(left.systemID)) ||
+    left.hops - right.hops ||
     left.opponentCharacterID - right.opponentCharacterID || left.stationID - right.stationID);
+  if (!candidates.length && contested.size) {
+    const patrols = [];
+    for (const systemID of contested) {
+      const stationID = worldData.getStationsForSystem(systemID)
+        .map((station) => normalizeID(station.stationID || station.itemID))
+        .filter(Boolean)
+        .sort((left, right) => left - right)[0];
+      if (!stationID) continue;
+      const route = space.previewSystemRoute(bot, systemID);
+      if (!route.success || route.hops > maxHops) continue;
+      patrols.push({ success: true, mode: "war", systemID, stationID, territory: true, hops: route.hops, risk: route.risk });
+    }
+    patrols.sort((left, right) => left.hops - right.hops || left.systemID - right.systemID);
+    if (patrols[0]) return patrols[0];
+  }
   return candidates[0] || {
     success: false,
     message: "No reachable online legal war opponent is currently in a system with a station and asteroid belt.",

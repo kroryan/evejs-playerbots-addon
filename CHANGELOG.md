@@ -59,6 +59,16 @@ the Windows launcher package adds a fourth number for its own releases.
   `GET /v1/map/static` (every solar system's position, security and region,
   and the stargate links) and `GET /v1/map/live` (the pilots in each system
   and current sovereignty), with the usual add-on token.
+- **Territory claims and territory wars.** The Territory Map can claim
+  systems for any corporation (`POST /v1/map/claim` and `/v1/map/unclaim`,
+  `GET /v1/map/corporations`): up to five per corporation, the first in its
+  headquarters system, each next one a stargate jump from one it holds.
+  Claims are saved with the other Playerbots data. When two corporations
+  claim the same system, a bot corporation among them declares a normal war
+  on the other (war bill, 24-hour timer, Crimewatch), and its war pilots go
+  after rival pilots in contested systems first, or patrol them when none is
+  online. `/v1/map/live` now lists claims, contested systems and the war for
+  each contested pair. `EVEJS_PLAYER_BOTS_TERRITORY_WARS=0` turns the wars off.
 - **Pilots in crowded systems no longer stall the director.** About 3,700
   of 5,000 pilots sat in starter systems over the per-system cap, where the
   only work is a relocation trip, and those are limited to 100 at a time. The

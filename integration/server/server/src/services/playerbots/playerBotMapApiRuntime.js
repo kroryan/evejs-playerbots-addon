@@ -118,13 +118,66 @@ function buildLiveMap() {
       sovereignty[id] = [allianceID, corporationID];
     }
   } catch (_) { /* sovereignty unavailable */ }
+  let claims = {};
+  let contested = {};
+  let territoryWars = {};
+  try {
+    const territory = require("./playerBotTerritoryClaimsRuntime");
+    claims = territory.getClaims();
+    contested = territory.getContested();
+    territoryWars = territory.getTerritoryWars();
+    for (const id of Object.keys(claims)) corporationName(Number(id), corporations);
+  } catch (_) { /* claims unavailable */ }
   return {
     at: new Date().toISOString(),
     bots,
     sovereignty,
+    claims,
+    contested,
+    territoryWars,
     corporations: Object.fromEntries(corporations),
     alliances: Object.fromEntries(alliances),
   };
 }
 
-module.exports = { buildStaticMap, buildLiveMap };
+// Corporations the operator can manage on the map: every corporation with a
+// roster bot, online pilot or claim, with a name search for the rest.
+function listMapCorporations(query = "") {
+  const corporations = new Map();
+  const botCounts = new Map();
+  const { readSharedCharacterRecord } = require("../character/characterState");
+  for (const profile of require("./playerBotRuntime").listBotProfiles()) {
+    const character = readSharedCharacterRecord(Math.trunc(num(profile.characterID))) || {};
+    const id = Math.trunc(num(character.corporationID ?? profile.corporationID));
+    if (id) botCounts.set(id, (botCounts.get(id) || 0) + 1);
+  }
+  const ids = new Set(botCounts.keys());
+  try {
+    for (const session of require("../chat/sessionRegistry").getSessions()) {
+      const id = Math.trunc(num(session && (session.corporationID || session.corpid)));
+      if (id && !session._playerBotActor) ids.add(id);
+    }
+  } catch (_) { /* sessions unavailable */ }
+  try { for (const id of Object.keys(require("./playerBotTerritoryClaimsRuntime").getClaims())) ids.add(Number(id)); } catch (_) { /* none */ }
+  const text = String(query || "").trim();
+  if (text) {
+    try {
+      const found = require("../corporation/corporationState").findCorporationByName(text);
+      const id = Math.trunc(num(found && (found.corporationID || found)));
+      if (id) ids.add(id);
+    } catch (_) { /* not found */ }
+    if (/^\d+$/.test(text)) ids.add(Number(text));
+  }
+  const state = require("../corporation/corporationState");
+  const out = [];
+  for (const id of ids) {
+    if (state.isNpcCorporationID && state.isNpcCorporationID(id)) continue;
+    const record = state.getCorporationRecord(id);
+    if (!record) continue;
+    out.push([id, String(record.corporationName || `Corporation ${id}`), botCounts.get(id) || 0]);
+  }
+  out.sort((a, b) => a[1].localeCompare(b[1]));
+  return { corporations: out };
+}
+
+module.exports = { buildStaticMap, buildLiveMap, listMapCorporations };

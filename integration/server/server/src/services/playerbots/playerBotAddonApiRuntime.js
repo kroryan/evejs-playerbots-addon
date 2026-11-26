@@ -237,6 +237,19 @@ function createPlayerBotAddonApiRuntime(options = {}) {
       sendJson(response, 200, require("./playerBotMapApiRuntime").buildLiveMap());
       return;
     }
+    if (request.method === "GET" && url.pathname === "/v1/map/corporations") {
+      sendJson(response, 200, require("./playerBotMapApiRuntime").listMapCorporations(url.searchParams.get("q") || ""));
+      return;
+    }
+    if (request.method === "POST" && (url.pathname === "/v1/map/claim" || url.pathname === "/v1/map/unclaim")) {
+      const body = await readBody(request);
+      const territory = require("./playerBotTerritoryClaimsRuntime");
+      const result = url.pathname === "/v1/map/claim"
+        ? territory.claim(body.corporationID, body.systemID)
+        : territory.unclaim(body.corporationID, body.systemID);
+      sendJson(response, result.success ? 200 : Number(result.statusCode) || 400, result);
+      return;
+    }
     if (request.method === "GET" && url.pathname === "/v1/roster") {
       const bots = playerBots.listBots();
       sendJson(response, 200, {

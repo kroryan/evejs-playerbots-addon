@@ -1816,6 +1816,21 @@ async function runDirectorInternal(bots = [], options = {}) {
         `[PlayerBots] Bot rivalry war planning was skipped: ${String(error && error.message || error).slice(0, 180)}.`,
       );
     }
+    // Territory Map claims: contested systems lead to a normal corporation war.
+    try {
+      const territoryWar = await require("./playerBotTerritoryClaimsRuntime")
+        .declareTerritoryWars(allRosterBots, { humanControlledBotIDs });
+      if (territoryWar.declared) {
+        summary.territoryWarsDeclared = 1;
+        require("../../utils/logger").info(
+          `[PlayerBots] Declared corporation war ${territoryWar.warID} from corporation ${territoryWar.declaringCorporationID} against ${territoryWar.opposingCorporationID} over contested territory (${territoryWar.systems.join(", ")}); the normal 24-hour war start timer applies.`,
+        );
+      }
+    } catch (error) {
+      require("../../utils/logger").warn(
+        `[PlayerBots] Territory war planning was skipped: ${String(error && error.message || error).slice(0, 180)}.`,
+      );
+    }
     // Corporations attacked again and again declare war on the aggressor.
     try {
       const grievanceWar = await require("./playerBotGrievanceRuntime")
