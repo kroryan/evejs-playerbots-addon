@@ -25,9 +25,13 @@ the Windows launcher package adds a fourth number for its own releases.
   every wallet market transaction. EveJS 261125.3's save upgrade rejects that
   field ("Invalid character_market_transactions field or shape"), and its new
   schema would refuse such writes afterwards. The add-on no longer stores it.
-  Before running the EveJS 261125.3 update on an existing save, stop the
-  server and run `tools/playerbots/strip-transaction-order-ids.py` on the
-  `gamestore.sqlite` (Docker: in the `evejs-data` volume) to remove the field.
+  The upgrade also rejected ships whose far "fly in this direction" target
+  point (1e17 m, from stock EveJS) was saved as a long integer literal; bots
+  fly so much that their saves have many. Before running the EveJS 261125.3
+  update on an existing save, stop the server and run
+  `tools/playerbots/prepare-save-for-evejs-261125.py` on the `gamestore.sqlite`
+  (Docker: in the `evejs-data` volume). It removes the `orderID` fields and
+  rewrites those coordinates as floats of the same value.
 - **Bots no longer repeat empty sales.** A pilot holding goods with no buy
   order and no reference price ran a sale that sold and listed nothing, and the
   director gave it the same sale again at once. One live save had 156,635 such
