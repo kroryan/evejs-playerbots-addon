@@ -23,6 +23,9 @@ const FAILURE_COOLDOWN_MS = 60 * 60 * 1000;
 const LOSS_COOLDOWN_MS = 2 * 60 * 60 * 1000;
 const NO_OPPORTUNITY_COOLDOWN_MS = 30 * 60 * 1000;
 const MARKET_ORDER_CAPACITY_RETRY_COOLDOWN_MS = 5 * 60 * 1000;
+// A sale that found no buyer and no reference price sells and lists nothing;
+// retrying at once only repeats it (one live save had 156,635 such sales).
+const EMPTY_SALE_RETRY_COOLDOWN_MS = 2 * 60 * 60 * 1000;
 const UPGRADE_RETRY_COOLDOWN_MS = 60 * 60 * 1000;
 const UPGRADE_MARKET_QUEUE_RETRY_MS = 5 * 60 * 1000;
 const MIN_PRODUCTIVE_BOTS_PER_HUMAN_CORP = 3;
@@ -1118,6 +1121,14 @@ function marketOrderCapacityCoolingDown(operation, now = Date.now()) {
     now - completedAt < MARKET_ORDER_CAPACITY_RETRY_COOLDOWN_MS;
 }
 
+function emptySaleCoolingDown(operation, now = Date.now()) {
+  if (!operation || operation.kind !== "sell" || operation.status !== "completed" ||
+      Number(operation.unitsListed) > 0 || Number(operation.unitsSold) > 0) return false;
+  const completedAt = Date.parse(operation.completedAt || "");
+  return Number.isFinite(completedAt) && completedAt <= now &&
+    now - completedAt < EMPTY_SALE_RETRY_COOLDOWN_MS;
+}
+
 function upgradeCoolingDown(operation, now = Date.now()) {
   if (!operation) return false;
   const marketCapacityRetryAtMs = Number(operation.marketCapacityRetryAtMs) || 0;
@@ -1466,7 +1477,7 @@ function chooseAssignment(bot, options = {}) {
       unitsListed: lastCycle.ledger && lastCycle.ledger.unitsListed,
       unitsSold: lastCycle.ledger && lastCycle.ledger.unitsSold,
     });
-  const returnedStockStationID = operations.findSellableGoodsStation(bot);
+  const returnedStockStationID = emptySaleCoolingDown(lastOperation) ? null : operations.findSellableGoodsStation(bot);
   if (returnedStockStationID && !marketCapacityRetryCoolingDown) {
     return { kind: "sell", originStationID: returnedStockStationID };
   }
@@ -2649,7 +2660,7 @@ function formatPlayerOrders() {
 }
 
 module.exports = {
-  _testing: { industryCoolingDown, marketOrderCapacityCoolingDown, upgradeCoolingDown, combatCoolingDown, countProductiveBots, onlineHumanCorporationIDs,
+  _testing: { industryCoolingDown, marketOrderCapacityCoolingDown, emptySaleCoolingDown, upgradeCoolingDown, combatCoolingDown, countProductiveBots, onlineHumanCorporationIDs,
     chooseAssignment, chooseMiningAssignment, isFiniteDestinationWork, countBotRosterBySystem, applyRelocationReservations,
     chooseStructureMaintenanceAssignment,
     choosePostCapacityAssignment, findRelocationStation, selectWorkToPause, getCapacityWorkEntries,

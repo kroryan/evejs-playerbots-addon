@@ -21,6 +21,12 @@ the Windows launcher package adds a fourth number for its own releases.
   twice the page's default refresh, so most refreshes showed old numbers. It
   now keeps one for 5 seconds, and longer only when building it is expensive
   (20 times its build time, at most 30 seconds).
+- **Bots no longer repeat empty sales.** A pilot holding goods with no buy
+  order and no reference price ran a sale that sold and listed nothing, and the
+  director gave it the same sale again at once. One live save had 156,635 such
+  sales from 156 pilots (one pilot ran 7,169), each logged as "Sale completed:
+  0 units". After a sale that sold and listed nothing, the pilot now waits two
+  hours before trying that stock again and does other work meanwhile.
 - **Less load from the dashboard.** Identical reads from several tabs or
   views share one request to EveJS, and EveJS skips reads the dashboard has
   already given up on instead of building answers nobody receives. When EveJS
