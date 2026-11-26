@@ -1861,6 +1861,15 @@ async function runDirectorInternal(bots = [], options = {}) {
     listActiveWorkEntries(), botSystemIDs, humanControlledBotIDs,
   );
   let activeRelocations = countActiveCapacityRelocations(activeWorkEntries);
+  // Pilots working in each system (relocations are leaving, so they do not
+  // count). In a system over the per-system cap, up to the cap may still work
+  // there; only the pilots beyond it are limited to relocating out.
+  const workingBySystem = new Map();
+  for (const entry of activeWorkEntries) {
+    if (isCapacityRelocation(entry)) continue;
+    const workingSystemID = botSystemIDs.get(Number(entry.characterID)) || 0;
+    if (workingSystemID) workingBySystem.set(workingSystemID, (workingBySystem.get(workingSystemID) || 0) + 1);
+  }
   let activeColonySetups = activeWorkEntries.filter((entry) =>
     entry.source === "operation" && entry.kind === "colony").length;
   summary.activeRelocations = activeRelocations;
@@ -2035,6 +2044,7 @@ async function runDirectorInternal(bots = [], options = {}) {
     return entry;
   };
   let assignmentAttempts = 0;
+  const maxCapacityRelocations = getMaxConcurrentCapacityRelocations();
   budget.switchStage("assignment");
   for (const bot of candidates) {
     if (assignmentAttempts >= MAX_DIRECTOR_ASSIGNMENT_ATTEMPTS_PER_PASS) break;
@@ -2052,7 +2062,14 @@ async function runDirectorInternal(bots = [], options = {}) {
     const autonomousSystemLimit = BOT_CAPACITY.getMaxAutonomousBotsPerSystem();
     const humanControlled = humanControlledBotIDs.has(Number(bot.characterID));
     const residentCount = systemID ? rosterSystemCounts.get(systemID) || 0 : 0;
-    const overSystemLimit = Boolean(systemID && residentCount > autonomousSystemLimit && !humanControlled);
+    const overSystemLimit = Boolean(systemID && residentCount > autonomousSystemLimit && !humanControlled &&
+      (workingBySystem.get(systemID) || 0) >= autonomousSystemLimit);
+    // Over the per-system cap a pilot's only work is a relocation trip. While
+    // every relocation slot is taken, skip the costly planning below: with
+    // thousands of pilots in crowded starter systems it made each pass take so
+    // long that the pilots who could work were reached rarely or never.
+    if (overSystemLimit && !needsMinimumProductiveWork &&
+        activeRelocations >= maxCapacityRelocations) continue;
     const escortAssignment = humanControlled ? null : chooseMiningEscortAssignment(bot);
     const coreInstallPlan = escortAssignment ? null : findCoreInstallPlan(structureRuntime, bot);
     const rawStructureMaintenancePlan = escortAssignment || coreInstallPlan ? null :
@@ -2470,6 +2487,10 @@ async function runDirectorInternal(bots = [], options = {}) {
       summary.assigned += 1;
       if (assignment.kind === "relocate") activeRelocations += 1;
       else summary.active += 1;
+      const assignedSystemID = botSystemIDs.get(Number(bot.characterID)) || 0;
+      if (assignment.kind !== "relocate" && assignedSystemID) {
+        workingBySystem.set(assignedSystemID, (workingBySystem.get(assignedSystemID) || 0) + 1);
+      }
       if (assignment.kind === "colony") activeColonySetups += 1;
       if (assignment.kind === "agent-mission") activeAgentMissions += 1;
       if (assignment.kind === "colony" && reservedColonyDestinationSystemID) {
