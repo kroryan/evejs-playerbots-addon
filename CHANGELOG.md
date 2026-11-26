@@ -3,6 +3,52 @@
 Newest first. The Docker add-on keeps the upstream version number (0.2.152);
 the Windows launcher package adds a fourth number for its own releases.
 
+## Unreleased: EveJS 261125.3 and a dashboard that keeps up
+
+- **Works with EveJS 261125.3** (was 261115.2). The 34 server files whose
+  stock version changed were merged onto the new versions; see the pull
+  request for the hand-resolved ones. EveJS 261125.3 needs Node.js 26, so the
+  installer and the launcher package now ask for 26. Native package
+  0.2.152.17. The multicore TCP variant still targets the multicore build for
+  261115.2.
+- **Dashboard refreshes one request at a time.** The page used a fixed timer
+  that started a new refresh whether or not the last one had answered. When
+  EveJS was slow, requests stacked up behind the browser's six connections and
+  every page stopped loading. Refreshes now start a full interval after the
+  last one finished, hidden tabs stop polling, and the summary, activity and
+  pilot list load together instead of one after another.
+- **Live numbers.** The server kept a dashboard snapshot for 30 seconds,
+  twice the page's default refresh, so most refreshes showed old numbers. It
+  now keeps one for 5 seconds, and longer only when building it is expensive
+  (20 times its build time, at most 30 seconds).
+- **Saves upgrade to 261125.3.** Earlier releases stored an `orderID` on
+  every wallet market transaction. EveJS 261125.3's save upgrade rejects that
+  field ("Invalid character_market_transactions field or shape"), and its new
+  schema would refuse such writes afterwards. The add-on no longer stores it.
+  The upgrade also rejected ships whose far "fly in this direction" target
+  point (1e17 m, from stock EveJS) was saved as a long integer literal; bots
+  fly so much that their saves have many. Before running the EveJS 261125.3
+  update on an existing save, stop the server and run
+  `tools/playerbots/prepare-save-for-evejs-261125.py` on the `gamestore.sqlite`
+  (Docker: in the `evejs-data` volume). It removes the `orderID` fields and
+  rewrites those coordinates as floats of the same value. It also clears two
+  more things the new schema has no place for: the
+  `retiredFoundingOperationID` the roster reset left on emptied bot
+  corporations, and the planet launch receipts
+  (`launchOperationReceiptsByKey`) kept in `planetRuntimeState`. The add-on no
+  longer writes either; launch receipts, which stop a retried launch from
+  firing twice, are now kept in memory until EveJS restarts.
+- **Bots no longer repeat empty sales.** A pilot holding goods with no buy
+  order and no reference price ran a sale that sold and listed nothing, and the
+  director gave it the same sale again at once. One live save had 156,635 such
+  sales from 156 pilots (one pilot ran 7,169), each logged as "Sale completed:
+  0 units". After a sale that sold and listed nothing, the pilot now waits two
+  hours before trying that stock again and does other work meanwhile.
+- **Less load from the dashboard.** Identical reads from several tabs or
+  views share one request to EveJS, and EveJS skips reads the dashboard has
+  already given up on instead of building answers nobody receives. When EveJS
+  does not answer in time the page says it is busy and keeps the last data.
+
 ## Unreleased: corporation hangars
 
 - Chat and dashboard orders accept `upgrade <bot> trade` (the hauler line) and

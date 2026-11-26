@@ -244,8 +244,8 @@ function releaseEmptyCorporations(corporationIDs) {
     });
     if (living.length) continue;
     const result = runtime.updateCorporationRecord(corporationID, {
+      // EveJS 261125.3's corporation profile has no field for the old ID.
       foundingOperationID: null,
-      retiredFoundingOperationID: record.foundingOperationID,
     });
     if (result && result.success !== false) released += 1;
   }

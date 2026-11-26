@@ -69,6 +69,9 @@ const RESOURCE_DEPLETION_PRESSURE_SCALE = 412.224;
 const MAX_CUSTOMS_OPERATION_RECEIPTS = 1024;
 const MAX_NETWORK_EDIT_RECEIPTS = 128;
 const MAX_LAUNCH_OPERATION_RECEIPTS = 4096;
+// EveJS 261125.3 stores planetRuntimeState in a typed schema with no root for
+// launch receipts, so they live in memory for the life of the process.
+const launchOperationReceiptsByKey = new Map();
 const NETWORK_EDIT_RETRY_WINDOW_TICKS = 30n * BigInt(SECOND_TICKS);
 
 const COMMAND = Object.freeze({
@@ -151,12 +154,15 @@ function normalizeState(rawState = {}) {
     "acceptedNetworkEditsByKey",
     "networkEditReceiptsByKey",
     "customsOperationReceipts",
-    "launchOperationReceiptsByKey",
   ]) {
     if (!isPlainObject(state[key])) {
       state[key] = {};
       changed = true;
     }
+  }
+  if (Object.prototype.hasOwnProperty.call(state, "launchOperationReceiptsByKey")) {
+    delete state.launchOperationReceiptsByKey;
+    changed = true;
   }
 
   if (previousSchemaVersion < 2 && Object.keys(state.acceptedNetworkEditsByKey).length > 0) {
@@ -240,13 +246,13 @@ function getLaunchOperationReplay(options = {}) {
   const key = launchOperationReceiptKey(ownerID, operationID);
   if (!key) return { status: "none", receipt: null, launch: null };
 
-  const state = readState({ repair: true });
-  const receipt = state.launchOperationReceiptsByKey[key];
+  const receipt = launchOperationReceiptsByKey.get(key);
   if (!receipt) return { status: "none", receipt: null, launch: null };
   if (receipt.fingerprint !== buildLaunchOperationFingerprint(options)) {
     return { status: "conflict", receipt: cloneJson(receipt), launch: null };
   }
 
+  const state = readState({ repair: true });
   const launch = findStoredLaunch(state, normalizeInteger(receipt.launchID, 0));
   if (!launch) return { status: "missing-launch", receipt: cloneJson(receipt), launch: null };
   return {
@@ -261,22 +267,16 @@ function saveLaunchOperationReceipt(state, options = {}, launch = {}) {
   const ownerID = normalizeInteger(options.ownerID, 0);
   const key = launchOperationReceiptKey(ownerID, operationID);
   if (!key) return;
-  state.launchOperationReceiptsByKey[key] = {
+  launchOperationReceiptsByKey.set(key, {
     ownerID,
     operationID,
     fingerprint: buildLaunchOperationFingerprint(options),
     launchID: normalizeInteger(launch.launchID, 0),
     createdAt: new Date().toISOString(),
-  };
-
-  const keys = Object.keys(state.launchOperationReceiptsByKey);
-  if (keys.length > MAX_LAUNCH_OPERATION_RECEIPTS) {
-    keys.sort((left, right) => Date.parse(
-      state.launchOperationReceiptsByKey[left]?.createdAt || "",
-    ) - Date.parse(state.launchOperationReceiptsByKey[right]?.createdAt || ""));
-    for (const oldKey of keys.slice(0, keys.length - MAX_LAUNCH_OPERATION_RECEIPTS)) {
-      delete state.launchOperationReceiptsByKey[oldKey];
-    }
+  });
+  // Map keeps insertion order, so the first keys are the oldest.
+  while (launchOperationReceiptsByKey.size > MAX_LAUNCH_OPERATION_RECEIPTS) {
+    launchOperationReceiptsByKey.delete(launchOperationReceiptsByKey.keys().next().value);
   }
 }
 
@@ -5275,7 +5275,7 @@ module.exports = {
     saveLaunchOperationReceipt,
     findLaunchOperationReceipt: (state, options) => {
       const key = launchOperationReceiptKey(options && options.ownerID, options && options.operationID);
-      return key ? state.launchOperationReceiptsByKey && state.launchOperationReceiptsByKey[key] || null : null;
+      return key ? launchOperationReceiptsByKey.get(key) || null : null;
     },
     evaluateResourceLayerHarmonicValue,
     normalizeCommandStream,
