@@ -34,6 +34,10 @@ let started = false;
 let localPresenceTimer = null;
 let corporationBotPresenceTimer = null;
 let connectedActorCount = 0;
+// Startup connects every selected bot. With a large online cap that is
+// minutes of work, so it runs in slices that yield to the event loop.
+const STARTUP_CONNECT_SLICE_MS = 50;
+let startupConnection = null;
 const LOCAL_PRESENCE_INTERVAL_MS = 15_000;
 
 function normalizePositiveID(value) {
@@ -647,33 +651,58 @@ function reconcileActorConnections(options = {}) {
     }
   }
   const activeWork = activeWorkCharacterIDs();
-  for (const characterID of desiredConnectedCharacterIDs) {
-    const bot = botsByID.get(characterID);
-    if (!bot) continue;
-    try {
-      const session = getActorSession(bot);
-      if (activeWork.has(characterID) && !isDockedSession(session) &&
-          bot.status !== "paused" && bot.autonomyPaused !== true) {
-        const scene = session._space && spaceRuntime.getSceneForSession(session);
-        const alreadyAttached = Boolean(scene && scene.getShipEntityForSession(session));
-        ensureActorInSpace(bot);
-        if (!alreadyAttached) attached += 1;
-      } else if (session._space && !activeWork.has(characterID)) {
-        detachBotActorFromSpace(characterID, "idle");
-      }
-    } catch (error) {
-      log.warn(`[PlayerBots] Scheduled actor connection failed char=${characterID}: ${error.message}`);
-    }
-  }
-  syncLocalPresence();
-  syncScopedChannelPresence();
-  return {
-    selected: plan.selectedCount,
-    connected: getConnectedBotCharacterIDs().size,
-    detached,
-    attached,
-    plan,
+  const finish = () => {
+    syncLocalPresence();
+    syncScopedChannelPresence();
+    return {
+      selected: plan.selectedCount,
+      connected: getConnectedBotCharacterIDs().size,
+      detached,
+      attached,
+      plan,
+    };
   };
+  const pending = [...desiredConnectedCharacterIDs];
+  if (options.gradual === true) {
+    return (async () => {
+      let index = 0;
+      while (index < pending.length && started) {
+        const sliceEndsAt = Date.now() + STARTUP_CONNECT_SLICE_MS;
+        do {
+          attached += connectDesiredActor(pending[index], botsByID, activeWork);
+          index += 1;
+        } while (index < pending.length && Date.now() < sliceEndsAt);
+        await new Promise((resolve) => setImmediate(resolve));
+      }
+      return finish();
+    })();
+  }
+  for (const characterID of pending) {
+    attached += connectDesiredActor(characterID, botsByID, activeWork);
+  }
+  return finish();
+}
+
+// Connects one selected bot; returns 1 when it newly put the bot in space.
+function connectDesiredActor(characterID, botsByID, activeWork) {
+  const bot = botsByID.get(characterID);
+  if (!bot) return 0;
+  try {
+    const session = getActorSession(bot);
+    if (activeWork.has(characterID) && !isDockedSession(session) &&
+        bot.status !== "paused" && bot.autonomyPaused !== true) {
+      const scene = session._space && spaceRuntime.getSceneForSession(session);
+      const alreadyAttached = Boolean(scene && scene.getShipEntityForSession(session));
+      ensureActorInSpace(bot);
+      return alreadyAttached ? 0 : 1;
+    }
+    if (session._space && !activeWork.has(characterID)) {
+      detachBotActorFromSpace(characterID, "idle");
+    }
+  } catch (error) {
+    log.warn(`[PlayerBots] Scheduled actor connection failed char=${characterID}: ${error.message}`);
+  }
+  return 0;
 }
 
 function ensureCorporationBotsConnected(corporationID) {
@@ -697,7 +726,7 @@ function ensureCorporationBotsConnected(corporationID) {
 }
 
 function reconcileConnectedCorporations() {
-  if (!started) return [];
+  if (!started || startupConnection) return [];
   require("./playerBotDirectorRuntime").enforceConcurrentWorkLimit({ skipUpgradeMarketPlanning: true });
   const corporationIDs = getHumanConnectedCorporationIDs();
   const presence = reconcileActorConnections({ humanCorporations: corporationIDs });
@@ -1578,15 +1607,11 @@ function getStatusSummary() {
 }
 
 function start() {
-  if (started) return getStatusSummary();
+  if (started) return startupConnection || Promise.resolve({ ...getStatusSummary(), attachedCount: 0, failedCount: 0 });
   started = true;
   require("./playerBotPortraitRuntime").startPortraitRepair(playerBots.listBotProfiles());
   const bots = playerBots.listBots();
   const capacity = require("./playerBotDirectorRuntime").enforceConcurrentWorkLimit();
-  const connection = reconcileActorConnections({ bots });
-  const attachedCount = connection.attached;
-  const failedCount = Math.max(0, connection.selected - connection.connected);
-  const presentCount = connection.connected;
   localPresenceTimer = setInterval(() => {
     syncLocalPresence();
     syncScopedChannelPresence();
@@ -1597,19 +1622,28 @@ function start() {
     CORPORATION_BOT_RECONCILE_INTERVAL_MS,
   );
   if (typeof corporationBotPresenceTimer.unref === "function") corporationBotPresenceTimer.unref();
-  const status = getStatusSummary();
-  log.info(
-    `[PlayerBots] Space actors ready attached=${attachedCount} active=${status.activeActors} ` +
-      `failed=${failedCount}; online as pilots=${presentCount}; work capacity=${capacity.active}/${capacity.limit} ` +
-      `queued=${capacity.queued}; connection rotation=${status.connectionSchedule && status.connectionSchedule.selected}/` +
-      `${status.totalBots} across ${status.connectionSchedule && status.connectionSchedule.groupCount || 0} groups, ` +
-      `next=${status.connectionSchedule && status.connectionSchedule.nextRotationAt || "n/a"}.`,
-  );
-  return { ...status, attachedCount, failedCount };
+  const connecting = reconcileActorConnections({ bots, gradual: true }).then((connection) => {
+    const attachedCount = connection.attached;
+    const failedCount = Math.max(0, connection.selected - connection.connected);
+    const status = getStatusSummary();
+    log.info(
+      `[PlayerBots] Space actors ready attached=${attachedCount} active=${status.activeActors} ` +
+        `failed=${failedCount}; online as pilots=${connection.connected}; work capacity=${capacity.active}/${capacity.limit} ` +
+        `queued=${capacity.queued}; connection rotation=${status.connectionSchedule && status.connectionSchedule.selected}/` +
+        `${status.totalBots} across ${status.connectionSchedule && status.connectionSchedule.groupCount || 0} groups, ` +
+        `next=${status.connectionSchedule && status.connectionSchedule.nextRotationAt || "n/a"}.`,
+    );
+    return { ...status, attachedCount, failedCount };
+  }).finally(() => {
+    if (startupConnection === connecting) startupConnection = null;
+  });
+  startupConnection = connecting;
+  return connecting;
 }
 
 async function shutdown() {
   started = false;
+  startupConnection = null;
   const deadline = Date.now() + SHUTDOWN_TIMEOUT_MS;
   if (localPresenceTimer) clearInterval(localPresenceTimer);
   localPresenceTimer = null;

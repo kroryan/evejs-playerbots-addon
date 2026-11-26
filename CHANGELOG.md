@@ -38,6 +38,12 @@ the Windows launcher package adds a fourth number for its own releases.
   (`launchOperationReceiptsByKey`) kept in `planetRuntimeState`. The add-on no
   longer writes either; launch receipts, which stop a retried launch from
   firing twice, are now kept in memory until EveJS restarts.
+- **Large rosters no longer crash EveJS at startup.** EveJS connected every
+  online bot in one pass before it did anything else. With 5,000 bots online
+  that held the server for about 15 minutes; EveJS 261125.3 then lost its
+  database lease and stopped ("persistence owner lease lost", "database is
+  locked"). Bots now connect in short batches in the background, and the
+  server answers health checks and keeps its leases meanwhile.
 - **Bots no longer repeat empty sales.** A pilot holding goods with no buy
   order and no reference price ran a sale that sold and listed nothing, and the
   director gave it the same sale again at once. One live save had 156,635 such
