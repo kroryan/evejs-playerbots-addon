@@ -61,7 +61,11 @@ the Windows launcher package adds a fourth number for its own releases.
   director still ran its full planning for each of them on every pass and then
   discarded it, so passes took so long that the pilots who could work were
   rarely reached; 4,130 pilots showed "Waiting for the director". While every
-  relocation slot is taken, those pilots are now skipped.
+  relocation slot is taken, those pilots are now skipped. And the cap now
+  restricts only the pilots beyond it: in a crowded system up to the cap (100
+  by default) may still take work there. Before, every resident of a system
+  over the cap could only relocate, so ten crowded starter systems held about
+  4,700 pilots that could not work at all.
 - **No long freeze from site upkeep after a restart.** The pass that removes
   the seeded sites of unloaded systems purged up to 500 sites in one call, and
   EveJS scans every item for each purged site. Right after a restart every
