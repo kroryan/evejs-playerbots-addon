@@ -598,11 +598,21 @@ function getConnectedBotCharacterIDs() {
     .filter(Boolean));
 }
 
+// Before start() there is no live connection set, so the answer comes from
+// the plan. Building it reads every bot and all active work; callers such as
+// the fleet upkeep ask once per candidate, so a built plan is reused briefly.
+const UNSTARTED_PLAN_TTL_MS = 5_000;
+let unstartedPlan = null;
+
 function isBotConnectedForWork(characterID, bots = null) {
   const id = normalizePositiveID(characterID);
   if (started) return desiredConnectedCharacterIDs.has(id);
-  const roster = Array.isArray(bots) ? bots : playerBots.listBots();
-  return buildConnectionPlan(roster).characterIDs.includes(id);
+  const now = Date.now();
+  if (!unstartedPlan || now - unstartedPlan.builtAt >= UNSTARTED_PLAN_TTL_MS) {
+    const roster = Array.isArray(bots) ? bots : playerBots.listBots();
+    unstartedPlan = { builtAt: now, characterIDs: new Set(buildConnectionPlan(roster).characterIDs) };
+  }
+  return unstartedPlan.characterIDs.has(id);
 }
 
 function nextBotConnectionAtMs(characterID, bots = playerBots.listBots(), nowMs = Date.now()) {

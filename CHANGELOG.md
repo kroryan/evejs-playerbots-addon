@@ -38,6 +38,23 @@ the Windows launcher package adds a fourth number for its own releases.
   (`launchOperationReceiptsByKey`) kept in `planetRuntimeState`. The add-on no
   longer writes either; launch receipts, which stop a retried launch from
   firing twice, are now kept in memory until EveJS restarts.
+- **EveJS keeps answering while the director plans.** With a 5,000-pilot
+  roster the dashboard timed out almost all the time, and so did the add-on's
+  own calls. A CPU profile of the live server showed 85% of its time in the
+  director pass, which stopped yielding once it had been parked for 2 seconds
+  in total. On a busy server that came within seconds, and the rest of the
+  pass ran as one block of about 5 minutes. Passes now keep yielding to the
+  rest of EveJS. Each pilot's turn is also much cheaper: the PI collection
+  check no longer copies every planet launch ever made (45% of the time),
+  player buy orders and the set of bot owners are kept for a few seconds
+  instead of rereading all 5,000 character records per pilot (16%), and the
+  mining escort check reads operations without copying them all (13%).
+- **Large rosters start reliably.** At startup the bot fleet upkeep asked,
+  for every candidate pilot, whether it was due online, and each answer
+  rebuilt the whole 5,000-pilot connection plan. That held EveJS for over a
+  minute just after its scheduler started, its startup calls timed out, and
+  it exited ("Authority scheduler command schedule ... timed out"). The plan
+  is now built once and reused for a few seconds.
 - **Large rosters no longer crash EveJS at startup.** EveJS connected every
   online bot in one pass before it did anything else. With 5,000 bots online
   that held the server for about 15 minutes; EveJS 261125.3 then lost its
