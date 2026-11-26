@@ -7,8 +7,8 @@ income, portrait repair, level 1 agent missions, Windows multicore support,
 fewer disk writes and other performance work) together with the overhauled
 operator dashboard from this repository.
 
-You need EveJS **261115.2**, EVEJS Launcher **1.0.91** or later and
-**Node.js 24** or later. This is @xrizonx's *Playerbots 0.2.152.16 (Windows,
+You need EveJS **261125.3**, EVEJS Launcher **1.0.91** or later and
+**Node.js 26.13** or later. This is @xrizonx's *Playerbots 0.2.152.16 (Windows,
 Luna)* with one addition: `server/src/gameStore/sqliteStore.js` also saves
 customs inspection cases one row at a time, as the customs change merged
 upstream in PR #14 expects. Every other file it installs is identical.

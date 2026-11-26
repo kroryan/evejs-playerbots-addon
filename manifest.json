@@ -4,7 +4,7 @@
   "version": "0.2.152",
   "evejsVersion": "261115.2",
   "apiVersion": 1,
-  "runtime": "node >= 24",
+  "runtime": "node >= 26",
   "process": "standalone",
   "sourceOverlay": "integration/manifest.json"
 }
