@@ -16,10 +16,19 @@ const TABLE = "playerBots";
 const STATE_PATH = "/_siteUpkeep";
 const PRUNED_ORIGIN = "universe_dungeon";
 const PASS_INTERVAL_MS = 60 * 1000;
+// While sites are still waiting to go, the next pass comes sooner.
+const BACKLOG_PASS_INTERVAL_MS = 10 * 1000;
 const UNLOADED_GRACE_MS = 30 * 60 * 1000;
 const HUMAN_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
 const MAX_HUMAN_SYSTEMS = 2000;
 const MAX_PURGED_PER_PASS = 500;
+// Purging one site makes EveJS scan every item for the site's contents, so a
+// pass purges a few at a time and stops after this long. Purging 500 in one
+// call held the server for close to a minute after a restart, long enough to
+// lose its database lease.
+const PURGE_CHUNK = 5;
+const PASS_BUDGET_MS = 250;
+let backlog = false;
 
 const lastLoadedAtBySystem = new Map();
 let lastPassAtMs = 0;
@@ -104,7 +113,8 @@ function listPrunableInstanceIDs(entries, options) {
 function runSiteUpkeepPass(options = {}) {
   const nowMs = Number(options.nowMs) || Date.now();
   if (!enabled(options.env)) return { skipped: "disabled" };
-  if (options.force !== true && nowMs - lastPassAtMs < PASS_INTERVAL_MS) return { skipped: "interval" };
+  const intervalMs = backlog ? BACKLOG_PASS_INTERVAL_MS : PASS_INTERVAL_MS;
+  if (options.force !== true && nowMs - lastPassAtMs < intervalMs) return { skipped: "interval" };
   lastPassAtMs = nowMs;
   stats.passes += 1;
   const deps = { ...defaultDeps(), ...(options.deps || {}) };
@@ -119,11 +129,22 @@ function runSiteUpkeepPass(options = {}) {
       nowMs,
       limit: MAX_PURGED_PER_PASS,
     });
+    backlog = false;
     if (!ids.length) return { purged: 0 };
-    const result = deps.dungeon().purgeInstances(ids, { source: "playerbots-site-upkeep" });
-    const purged = Number(result && result.removedCount) || 0;
+    const clock = typeof options.clock === "function" ? options.clock : Date.now;
+    const startedAtMs = clock();
+    let purged = 0;
+    let index = 0;
+    while (index < ids.length) {
+      const chunk = ids.slice(index, index + PURGE_CHUNK);
+      index += chunk.length;
+      const result = deps.dungeon().purgeInstances(chunk, { source: "playerbots-site-upkeep" });
+      purged += Number(result && result.removedCount) || 0;
+      if (clock() - startedAtMs >= PASS_BUDGET_MS) break;
+    }
+    backlog = index < ids.length;
     stats.purged += purged;
-    return { purged };
+    return { purged, remaining: ids.length - index };
   } catch (error) {
     stats.failures += 1;
     stats.lastError = String(error && error.message || error).slice(0, 180);
@@ -144,6 +165,6 @@ module.exports = {
   _testing: {
     listPrunableInstanceIDs,
     noteHumanSystems,
-    reset: () => { lastLoadedAtBySystem.clear(); lastPassAtMs = 0; Object.assign(stats, { passes: 0, purged: 0, failures: 0, lastError: null }); },
+    reset: () => { lastLoadedAtBySystem.clear(); lastPassAtMs = 0; backlog = false; Object.assign(stats, { passes: 0, purged: 0, failures: 0, lastError: null }); },
   },
 };

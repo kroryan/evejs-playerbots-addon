@@ -55,6 +55,14 @@ the Windows launcher package adds a fourth number for its own releases.
   player buy orders and the set of bot owners are kept for a few seconds
   instead of rereading all 5,000 character records per pilot (16%), and the
   mining escort check reads operations without copying them all (13%).
+- **No long freeze from site upkeep after a restart.** The pass that removes
+  the seeded sites of unloaded systems purged up to 500 sites in one call, and
+  EveJS scans every item for each purged site. Right after a restart every
+  unloaded system's sites qualify at once, so the first pass held the server
+  for 45 to 55 seconds; EveJS 261126.2 then lost its database lease and exited
+  ("database is locked"). A pass now purges five sites at a time for at most a
+  quarter of a second, and comes back every 10 seconds instead of every minute
+  while sites are still waiting.
 - **Less steady load from online bots.** A second profile, after the
   director fixes, showed two costs that grow with the number of bots online.
   EveJS's 30-second chat presence pass sent each session a Local member list
