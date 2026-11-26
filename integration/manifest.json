@@ -460,8 +460,8 @@
     },
     "server/src/services/planet/planetRuntimeStore.js": {
       "baseSha256": "6c4f9c89b8b5395561ce6be413a07b8f8d783d9c7582f4d9df0a92e6d7dcb555",
-      "sourceSha256": "256f60570378649382ad2bd0246d244a956a853c5c09609185e713e54ca22594",
-      "overlaySha256": "256f60570378649382ad2bd0246d244a956a853c5c09609185e713e54ca22594",
+      "sourceSha256": "aacc9d669eba814c5e6b4513c5d5b3d9afa724dc3897393c17ddba2d1b674b72",
+      "overlaySha256": "aacc9d669eba814c5e6b4513c5d5b3d9afa724dc3897393c17ddba2d1b674b72",
       "subsystem": "planetary"
     },
     "server/src/services/playerbots/playerBotActivityState.js": {
@@ -862,8 +862,8 @@
     },
     "server/src/services/playerbots/playerBotRosterResetRuntime.js": {
       "baseSha256": null,
-      "sourceSha256": "90b56d02c8ef0d4296f50209ede61c38b85588b24ea54d88674228e7c1322d6a",
-      "overlaySha256": "90b56d02c8ef0d4296f50209ede61c38b85588b24ea54d88674228e7c1322d6a",
+      "sourceSha256": "28af9e6c1943f9c52b75280156929e92ee8a98a05f8560a0d8bb33b09b65c460",
+      "overlaySha256": "28af9e6c1943f9c52b75280156929e92ee8a98a05f8560a0d8bb33b09b65c460",
       "subsystem": "playerbots-core"
     },
     "server/src/services/playerbots/playerBotRuntime.js": {

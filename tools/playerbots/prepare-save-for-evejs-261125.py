@@ -14,8 +14,18 @@ Playerbots releases stop that upgrade:
    a BigInt, the typed column returns a float, and the row "differs after
    conversion". Bots fly a lot, so their saves have many of these.
 
-This removes (1) from walletAuthorityState and rewrites the coordinates in (2)
-as floating-point numbers of the same value. Nothing else changes.
+3. The roster reset kept a retiredFoundingOperationID on bot corporations it
+   emptied. The new corporation profile has no such field: "Invalid
+   corporation_profiles field or shape".
+4. Planet launch receipts were kept in planetRuntimeState under
+   launchOperationReceiptsByKey. The new schema has no such root:
+   "Unrecognized planetRuntimeState record key". The add-on now keeps them
+   in memory.
+
+This removes (1) from walletAuthorityState, (3) from corporations and the
+row in (4), and rewrites the coordinates in (2) as floating-point numbers of
+the same value.
+Nothing else changes.
 
 Stop the server first and keep a backup of the save.
 
@@ -51,6 +61,20 @@ def strip_order_ids(value) -> int:
     return removed
 
 
+def strip_key(value, name: str) -> int:
+    removed = 0
+    if isinstance(value, dict):
+        if name in value:
+            del value[name]
+            removed += 1
+        for child in value.values():
+            removed += strip_key(child, name)
+    elif isinstance(value, list):
+        for child in value:
+            removed += strip_key(child, name)
+    return removed
+
+
 def float_vectors(value) -> int:
     """Turn unsafe whole-number x/y/z coordinates into floats; return the count."""
     changed = 0
@@ -81,12 +105,18 @@ def main() -> int:
     parser.add_argument("--check", action="store_true", help="report what would change and write nothing")
     args = parser.parse_args()
     db = sqlite3.connect(args.database)
-    totals = {"orderID fields": 0, "coordinates": 0, "rows": 0}
+    totals = {"orderID fields": 0, "coordinates": 0, "corporation fields": 0, "rows": 0, "receipt rows": 0}
     with db:
+        if "planetRuntimeState" in legacy_tables(db):
+            where = "FROM planetRuntimeState WHERE key = 'launchOperationReceiptsByKey'"
+            totals["receipt rows"] = db.execute(f"SELECT COUNT(*) {where}").fetchone()[0]
+            if totals["receipt rows"] and not args.check:
+                db.execute(f"DELETE {where}")
         for table in legacy_tables(db):
             wallets = table == "walletAuthorityState"
+            corporations = table == "corporations"
             for key, text in db.execute(f'SELECT key, json FROM "{table}"').fetchall():
-                if not wallets and '"x":' not in (text or ""):
+                if not wallets and not corporations and '"x":' not in (text or ""):
                     continue
                 try:
                     record = json.loads(text)
@@ -94,8 +124,10 @@ def main() -> int:
                     continue
                 order_ids = strip_order_ids(record) if wallets else 0
                 coordinates = float_vectors(record)
-                if not order_ids and not coordinates:
+                corporation_fields = strip_key(record, "retiredFoundingOperationID") if corporations else 0
+                if not order_ids and not coordinates and not corporation_fields:
                     continue
+                totals["corporation fields"] += corporation_fields
                 totals["orderID fields"] += order_ids
                 totals["coordinates"] += coordinates
                 totals["rows"] += 1
@@ -104,7 +136,9 @@ def main() -> int:
                                (json.dumps(record, separators=(",", ":")), key))
     verb = "Would change" if args.check else "Changed"
     print(f"{verb} {totals['rows']} row(s): {totals['orderID fields']} orderID field(s) removed, "
-          f"{totals['coordinates']} coordinate(s) written as floats.")
+          f"{totals['coordinates']} coordinate(s) written as floats, "
+          f"{totals['corporation fields']} retiredFoundingOperationID field(s) removed, "
+          f"{totals['receipt rows']} planet launch receipt row(s) removed.")
     return 0
 
 

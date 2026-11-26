@@ -31,7 +31,13 @@ the Windows launcher package adds a fourth number for its own releases.
   update on an existing save, stop the server and run
   `tools/playerbots/prepare-save-for-evejs-261125.py` on the `gamestore.sqlite`
   (Docker: in the `evejs-data` volume). It removes the `orderID` fields and
-  rewrites those coordinates as floats of the same value.
+  rewrites those coordinates as floats of the same value. It also clears two
+  more things the new schema has no place for: the
+  `retiredFoundingOperationID` the roster reset left on emptied bot
+  corporations, and the planet launch receipts
+  (`launchOperationReceiptsByKey`) kept in `planetRuntimeState`. The add-on no
+  longer writes either; launch receipts, which stop a retried launch from
+  firing twice, are now kept in memory until EveJS restarts.
 - **Bots no longer repeat empty sales.** A pilot holding goods with no buy
   order and no reference price ran a sale that sold and listed nothing, and the
   director gave it the same sale again at once. One live save had 156,635 such
