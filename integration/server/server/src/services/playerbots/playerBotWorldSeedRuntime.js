@@ -163,7 +163,8 @@ function buildPlan(options = {}) {
   }
   const candidateRegions = [...regions.values()].filter((region) => region.ids.length >= 15 && region.claimable / region.ids.length >= 0.8);
 
-  const corporations = corporationsToSeed(options);
+  const only = new Set((options.onlyCorporationIDs || []).map(positiveID).filter(Boolean));
+  const corporations = corporationsToSeed(options).filter((id) => !only.size || only.has(id));
   const plan = [];
   const usedRegions = new Set();
   const distance = (a, b) => Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z);
@@ -551,11 +552,13 @@ function startSeed(options = {}) {
   const plan = buildPlan(options);
   if (plan.missingTypes.length) return { success: false, message: `These item types are missing from the static data: ${plan.missingTypes.join(", ")}.` };
   const previous = state.corporations || {};
+  const trial = (options.onlyCorporationIDs || []).length > 0;
   state = {
     status: "running",
     startedAt: new Date().toISOString(),
     options: { sovereignty: options.sovereignty !== false, moveBots: options.moveBots !== false, ordersAndJobs: options.ordersAndJobs !== false },
-    corporations: {},
+    // A trial run for some corporations keeps the others' earlier results.
+    corporations: trial ? { ...previous } : {},
     errors: [],
     queue: [],
   };

@@ -502,7 +502,13 @@ function createDashboardServer(options = {}) {
       return proxyMutation(response, "/v1/dashboard/roster-reset", "POST", body);
     }
     if (url.pathname === "/api/world-seed") {
-      if (request.method === "GET") return proxyApi(response, "/v1/dashboard/world-seed", url.searchParams.get("plan") === "1" ? "?plan=1" : "");
+      if (request.method === "GET") {
+        const query = new URLSearchParams();
+        if (url.searchParams.get("plan") === "1") query.set("plan", "1");
+        const only = String(url.searchParams.get("only") || "").replace(/[^0-9,]/g, "").slice(0, 600);
+        if (only) query.set("only", only);
+        return proxyApi(response, "/v1/dashboard/world-seed", query.size ? `?${query}` : "");
+      }
       if (request.method !== "POST") {
         send(response, 405, "text/plain; charset=utf-8", "Method not allowed.", { allow: "GET, POST" });
         return;

@@ -486,7 +486,8 @@ function createPlayerBotAddonApiRuntime(options = {}) {
     if (url.pathname === "/v1/dashboard/world-seed") {
       const worldSeed = require("./playerBotWorldSeedRuntime");
       if (request.method === "GET") {
-        const plan = url.searchParams.get("plan") === "1" ? worldSeed.buildPlan() : null;
+        const only = String(url.searchParams.get("only") || "").split(",").map(Number).filter(Boolean);
+        const plan = url.searchParams.get("plan") === "1" ? worldSeed.buildPlan({ onlyCorporationIDs: only }) : null;
         sendJson(response, 200, { seed: worldSeed.getStatus(), plan, confirmation: worldSeed.CONFIRMATION });
         return;
       }
@@ -497,6 +498,7 @@ function createPlayerBotAddonApiRuntime(options = {}) {
           sovereignty: body && body.sovereignty !== false,
           moveBots: body && body.moveBots !== false,
           ordersAndJobs: body && body.ordersAndJobs !== false,
+          onlyCorporationIDs: Array.isArray(body && body.onlyCorporationIDs) ? body.onlyCorporationIDs.slice(0, 50) : [],
         });
         logger.info(`[PlayerBotsAddon] World seed requested: ${result.message}`);
         sendJson(response, result.success ? 202 : 400, result.success ? { seed: result.status, message: result.message } : { error: result.message });

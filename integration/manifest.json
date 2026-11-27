@@ -478,8 +478,8 @@
     },
     "server/src/services/playerbots/playerBotAddonApiRuntime.js": {
       "baseSha256": null,
-      "sourceSha256": "66b9760d16d118a44b5d23a3b6fde026c5c622f78f064f35ce3693ec9a2b3821",
-      "overlaySha256": "66b9760d16d118a44b5d23a3b6fde026c5c622f78f064f35ce3693ec9a2b3821",
+      "sourceSha256": "ae9f92f4b7d4a2ccfaf3dfea8e62ed039b2cdaadd0c299c1a395f21060b13532",
+      "overlaySha256": "ae9f92f4b7d4a2ccfaf3dfea8e62ed039b2cdaadd0c299c1a395f21060b13532",
       "subsystem": "playerbots-core"
     },
     "server/src/services/playerbots/playerBotAgentMissionRuntime.js": {
@@ -1025,8 +1025,8 @@
     "server/src/services/playerbots/playerBotWorldSeedRuntime.js": {
       "baseSha256": null,
       "subsystem": "playerbots-core",
-      "sourceSha256": "e1a6c32cb382f08bca36455de49a2a2caf4c1211c7247ea5fc20a51795a02d3e",
-      "overlaySha256": "e1a6c32cb382f08bca36455de49a2a2caf4c1211c7247ea5fc20a51795a02d3e"
+      "sourceSha256": "a78fb9d21605f93741c8f56c40e674e853582c15b499c7bd9478c50a7e09b6f2",
+      "overlaySha256": "a78fb9d21605f93741c8f56c40e674e853582c15b499c7bd9478c50a7e09b6f2"
     },
     "server/src/services/scheduler/durableScheduler.js": {
       "baseSha256": "456870d45bbb4223608ca5a74bd4306d97d284c0145b669c4bee6e94051dfeb5",
@@ -1195,7 +1195,7 @@
     "addons/playerbots/dashboard/js/view-settings.js": "e92cda4a1cca67e7a84a1ae2b567c567022975087cbfe294335dd11855d24d2f",
     "addons/playerbots/dashboard/js/view-world.js": "427330c0ca4b6a1864dc5f4a687dc842d7661290d4310af33413d969e635284a",
     "addons/playerbots/dashboard/styles.css": "ed3c82a8d21d5dbab7e930db3313a019c5bf7f82266a1387c05b6154b94dc979",
-    "addons/playerbots/dashboard-server.js": "ddfc5a66cb1da07c7ae4e6d75c847a2cc0f110267bc5c540006c9e4771dd4e07",
+    "addons/playerbots/dashboard-server.js": "718059680cbc9f8b559aec7810c11e79e98aba6159413d88bdafb75e4faf5ac4",
     "addons/playerbots/index.js": "2b087cf854c063875e1ac20d601934bf36ba4277cbb80f2a85e423745a0ef878",
     "addons/playerbots/manifest.json": "9ab945bd7813cc542ac34c9f1e5fc3d2e7023dd31f91be2c938619a1c8b24d42",
     "addons/playerbots/playerbots.py": "986e36722ff611ed0fb26e5b980bde73ed4569deda751ca778013aa1dc5f0d0d"
