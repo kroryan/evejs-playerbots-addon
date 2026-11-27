@@ -2989,6 +2989,41 @@ async function advanceUpgrade(operation, bot) {
   return block(operation, "blocked", `Unknown upgrade stage ${operation.stage}.`);
 }
 
+// World seed: the next ship on a role's ladder, with its parts already in the
+// pilot's hangar at stationID, so nothing is bought. Returns the rung, or null.
+function planSeededShipUpgrade(botQuery, role) {
+  const bot = getPlayerBots().resolveBot(botQuery);
+  if (!bot || !SHIP_LADDER[role]) return null;
+  return nextShipUpgrade(bot, role) || null;
+}
+
+// Starts that upgrade at the boarding step: board the hull, fit the modules.
+function startSeededShipUpgrade(botQuery, role, rung, stationID) {
+  const bot = getPlayerBots().resolveBot(botQuery);
+  const refusal = assertCanStart(bot);
+  if (refusal) return { success: false, message: refusal };
+  const operation = baseOperation("upgrade", bot, {
+    stage: "board",
+    role,
+    name: rung.name,
+    hullTypeID: rung.hullTypeID,
+    moduleTypeIDs: [...(rung.moduleTypeIDs || [])],
+    droneTypeIDs: [...(rung.droneTypeIDs || [])],
+    cargoTypeIDs: [...(rung.cargoTypeIDs || [])],
+    replenishOnly: false,
+    marketStationID: normalizePositiveInteger(stationID),
+    maxSpend: 0,
+    spent: 0,
+    pending: null,
+    newShipID: null,
+    autonomous: true,
+    worldSeed: true,
+  });
+  record(operation, `World seed: ${rung.name} and its parts were placed in the hangar at ${operation.marketStationID}; boarding and fitting.`);
+  saveOperation(operation);
+  return { success: true, operation };
+}
+
 function startShipUpgrade(botQuery, role = "mining", options = {}) {
   const bot = getPlayerBots().resolveBot(botQuery);
   const refusal = assertCanStart(bot, {
@@ -6626,6 +6661,8 @@ module.exports = {
   resumeOperation,
   reconcileLegacyPIExportReviews,
   startShipUpgrade,
+  planSeededShipUpgrade,
+  startSeededShipUpgrade,
   startCapsuleRecovery,
   startSavedFitting,
   startHaul,

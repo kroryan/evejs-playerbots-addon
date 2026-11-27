@@ -808,8 +808,8 @@
     },
     "server/src/services/playerbots/playerBotOperationRuntime.js": {
       "baseSha256": null,
-      "sourceSha256": "e3af7fb7ff58cf00c724a5a66fc9b81683a3a8527c5f38a8388ff66cb5a34718",
-      "overlaySha256": "e3af7fb7ff58cf00c724a5a66fc9b81683a3a8527c5f38a8388ff66cb5a34718",
+      "sourceSha256": "95a70910515cea95cbdb73a359e604948aca331a90d18b9877340ade5eaab211",
+      "overlaySha256": "95a70910515cea95cbdb73a359e604948aca331a90d18b9877340ade5eaab211",
       "subsystem": "playerbots-core"
     },
     "server/src/services/playerbots/playerBotOpsSummary.js": {
@@ -1025,8 +1025,8 @@
     "server/src/services/playerbots/playerBotWorldSeedRuntime.js": {
       "baseSha256": null,
       "subsystem": "playerbots-core",
-      "sourceSha256": "e86295d9f8209e6a97ea3ab0e8078cb45c719a9fa77d7da76b31e4121364957a",
-      "overlaySha256": "e86295d9f8209e6a97ea3ab0e8078cb45c719a9fa77d7da76b31e4121364957a"
+      "sourceSha256": "b941d5ae71f1f99e7513a2faba0beb986b534044408fd8444aa6097099367d41",
+      "overlaySha256": "b941d5ae71f1f99e7513a2faba0beb986b534044408fd8444aa6097099367d41"
     },
     "server/src/services/scheduler/durableScheduler.js": {
       "baseSha256": "456870d45bbb4223608ca5a74bd4306d97d284c0145b669c4bee6e94051dfeb5",
@@ -1192,7 +1192,7 @@
     "addons/playerbots/dashboard/js/view-history.js": "ceacdf87226e90e28cae6f97eee8824561e8f59a48adb4ad645d10d9c0831069",
     "addons/playerbots/dashboard/js/view-performance.js": "1d43f9842e6a5436c5450a6371d322aa2c0e6c6a49bb83574a28fb4326de53ca",
     "addons/playerbots/dashboard/js/view-reputation.js": "fbd02785b378e5c2f28d6f083264ab0cdb4bf31d702c6b74511d92c77f02cfc9",
-    "addons/playerbots/dashboard/js/view-settings.js": "e92cda4a1cca67e7a84a1ae2b567c567022975087cbfe294335dd11855d24d2f",
+    "addons/playerbots/dashboard/js/view-settings.js": "fbd1a327766b81766b6c46d9faa4ad6106c0c6482191a734d396dd87805a03b8",
     "addons/playerbots/dashboard/js/view-world.js": "427330c0ca4b6a1864dc5f4a687dc842d7661290d4310af33413d969e635284a",
     "addons/playerbots/dashboard/styles.css": "ed3c82a8d21d5dbab7e930db3313a019c5bf7f82266a1387c05b6154b94dc979",
     "addons/playerbots/dashboard-server.js": "718059680cbc9f8b559aec7810c11e79e98aba6159413d88bdafb75e4faf5ac4",

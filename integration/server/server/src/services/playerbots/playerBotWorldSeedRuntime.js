@@ -5,7 +5,8 @@
 // Each corporation gets its own null-sec region, an Astrahus (headquarters),
 // a Raitaru and an Athanor anchored, cored, fuelled and online with service
 // modules, three claimed systems with sovereignty, ISK in its wallet, its bots
-// docked in its structures, and a few market orders and manufacturing jobs.
+// docked in its structures with the next ship for their role, and a few
+// market orders and manufacturing jobs.
 // Everything is written through EveJS's own state modules so caches, indexes
 // and notifications stay right. A dry run returns the plan without changes.
 // Progress is saved per corporation and step, so a run can be repeated: done
@@ -75,6 +76,7 @@ function getStatus() {
     finishedAt: current.finishedAt || null,
     step: current.step || "",
     moved: current.moved || 0,
+    outfitted: current.outfitted || 0,
     toMove: current.toMove || 0,
     errors: (current.errors || []).slice(-20),
     corporations: corporations.map((entry) => ({
@@ -246,20 +248,23 @@ function findSeeded(corporationID, role) {
     positiveID(entry.devFlags.playerBotWorldSeed.corporationID) === corporationID && entry.devFlags.playerBotWorldSeed.role === role) || null;
 }
 
-function deploymentPosition(systemID, typeIDValue, index) {
+async function deploymentPosition(systemID, typeIDValue, index) {
   const world = require("../../space/worldData");
   const placement = require("../structure/structureDeploymentPlacement");
   const celestials = (world.getCelestialsForSystem(systemID) || []).filter((c) => Number(c.groupID) === 7);
   const anchors = celestials.length ? celestials : (world.getCelestialsForSystem(systemID) || []);
   // Out from a planet's surface, clear of it and of everything else. There
   // is no deploying ship, so no deployment-distance offset is checked.
-  for (let attempt = 0; attempt < Math.max(1, anchors.length); attempt += 1) {
+  // Each check rebuilds the system's obstacles, so tries are few and the
+  // server gets a breather between them.
+  for (let attempt = 0; attempt < Math.min(4, Math.max(1, anchors.length)); attempt += 1) {
     const pick = anchors[(index + attempt) % Math.max(1, anchors.length)] || {};
     const base = pick.position || { x: Number(pick.x) || 0, y: Number(pick.y) || 0, z: Number(pick.z) || 0 };
     const surface = Math.max(0, Number(pick.radius) || 0);
-    for (const clearance of [5_000_000, 10_000_000, 25_000_000, 60_000_000]) {
-      for (let step = 0; step < 12; step += 1) {
-        const angle = Math.PI * 2 * (step + index * 4) / 12;
+    for (const clearance of [8_000_000, 25_000_000]) {
+      for (let step = 0; step < 6; step += 1) {
+        await new Promise((resolve) => deps.schedule(resolve, 15));
+        const angle = Math.PI * 2 * (step + index * 2) / 6;
         const distance = surface + clearance;
         const position = { x: Number(base.x || 0) + Math.round(Math.cos(angle) * distance), y: Number(base.y || 0),
           z: Number(base.z || 0) + Math.round(Math.sin(angle) * distance) };
@@ -345,7 +350,9 @@ async function seedStructures(entry) {
   for (const [index, spec] of STRUCTURES.entries()) {
     let structure = findSeeded(entry.corporationID, spec.role);
     if (!structure) {
-      const position = deploymentPosition(entry.homeSystemID, spec.typeID, index);
+      const placedAt = Date.now();
+      const position = await deploymentPosition(entry.homeSystemID, spec.typeID, index);
+      timing(`${entry.name}: placing the ${spec.type}`, placedAt);
       if (!position) throw new Error(`no legal spot for the ${spec.type} in ${entry.homeSystemName}`);
       const result = structureState.seedStructureForSession(null, spec.type, {
         ownerCorpID: entry.corporationID,
@@ -436,14 +443,43 @@ function queueMoves(entry) {
     if (positiveID(character.corporationID ?? bot.corporationID) !== entry.corporationID || controlled.has(characterID)) continue;
     const role = STRUCTURE_FOR_SPECIALTY[bot.specialty] || "headquarters";
     const target = entry.structures[role] || entry.structures.headquarters;
-    if (positiveID(character.structureID) === target) continue;
     state.queue.push({ characterID, characterName: bot.characterName, target, corporationID: entry.corporationID });
   }
+}
+
+// Each pilot gets the next ship on its role's ladder: the hull and parts go
+// into its hangar where it now docks, and an upgrade boards and fits them.
+const SHIP_ROLE_FOR_SPECIALTY = { mining: "mining", security: "security", piracy: "piracy", sovereignty: "sovereignty", trade: "trade" };
+
+function outfitBot(job) {
+  const bot = require("./playerBotRuntime").listBots().find((entry) => Number(entry.characterID) === job.characterID);
+  const role = bot && SHIP_ROLE_FOR_SPECIALTY[bot.specialty];
+  if (!role) return false;
+  const operations = require("./playerBotOperationRuntime");
+  if (operations.hasActiveOperation(job.characterID)) {
+    try { operations.stopOperation(job.characterName); } catch (_) { /* the upgrade start reports it */ }
+  }
+  if (typeof operations.planSeededShipUpgrade !== "function") return false;
+  const rung = operations.planSeededShipUpgrade(bot.characterName, role);
+  if (!rung) return false;
+  const itemStore = require("../inventory/itemStore");
+  const hangar = itemStore.ITEM_FLAGS ? itemStore.ITEM_FLAGS.HANGAR : 4;
+  const counts = new Map();
+  for (const typeID of [...(rung.moduleTypeIDs || []), ...(rung.droneTypeIDs || []), ...(rung.cargoTypeIDs || [])]) {
+    counts.set(Number(typeID), (counts.get(Number(typeID)) || 0) + 1);
+  }
+  grant(job.characterID, job.target, hangar, [[rung.hullTypeID, 1, { singleton: 1 }], ...[...counts].map(([typeID, n]) => [typeID, n])],
+    `world-seed:ship:${job.characterID}:${rung.hullTypeID}`);
+  const result = operations.startSeededShipUpgrade(bot.characterName, role, rung, job.target);
+  if (!result.success) throw new Error(result.message);
+  return true;
 }
 
 function moveBot(job) {
   const bot = require("./playerBotRuntime").listBots().find((entry) => Number(entry.characterID) === job.characterID);
   if (!bot) return;
+  const { readSharedCharacterRecord } = require("../character/characterState");
+  if (positiveID((readSharedCharacterRecord(job.characterID) || {}).structureID) === job.target) return; // already home
   const operations = require("./playerBotOperationRuntime");
   if (operations.hasActiveOperation(job.characterID)) {
     try { operations.stopOperation(job.characterName); } catch (_) { /* moved anyway */ }
@@ -497,6 +533,11 @@ async function seedOrdersAndJobs(entry) {
 
 // ------------------------------------------------------------ the run
 
+function timing(label, startedAt) {
+  const ms = Date.now() - startedAt;
+  if (ms > 2000) try { deps.log().info(`[PlayerBots] World seed: ${label} took ${ms} ms.`); } catch (_) { /* best effort */ }
+}
+
 function note(message) {
   state.errors = [...(state.errors || []), String(message).slice(0, 240)].slice(-200);
   try { deps.log().warn(`[PlayerBots] World seed: ${message}`); } catch (_) { /* logging is best effort */ }
@@ -510,6 +551,7 @@ async function runCorporationSteps() {
     for (const step of STEPS) {
       if (entry.done[step]) continue;
       state.step = `${entry.name}: ${step}`;
+      const stepStartedAt = Date.now();
       try {
         if (step === "alliance") { if (state.options.sovereignty) seedAlliance(entry); }
         else if (step === "structures") await seedStructures(entry);
@@ -517,6 +559,7 @@ async function runCorporationSteps() {
         else if (step === "claims") seedClaims(entry);
         else if (step === "wallet") await seedWallet(entry);
         entry.done[step] = true;
+        timing(`${entry.name}: ${step}`, stepStartedAt);
       } catch (error) {
         note(`${entry.name}: ${step} failed (${error.message})`);
         if (step === "structures") { entry.error = error.message; break; }
@@ -535,7 +578,10 @@ async function runMoves() {
   while (state.queue.length) {
     state.step = `Moving bots into their structures (${state.moved} of ${state.toMove})`;
     for (const job of state.queue.splice(0, MOVE_BATCH)) {
-      try { moveBot(job); } catch (error) { if ((state.errors || []).length < 150) note(`move ${job.characterName} failed (${error.message})`); }
+      try {
+        moveBot(job);
+        if (state.options.ships && outfitBot(job)) state.outfitted = (state.outfitted || 0) + 1;
+      } catch (error) { if ((state.errors || []).length < 150) note(`${job.characterName}: ${error.message}`); }
       state.moved += 1;
     }
     if (state.moved % 200 < MOVE_BATCH) save();
@@ -582,7 +628,9 @@ function startSeed(options = {}) {
   state = {
     status: "running",
     startedAt: new Date().toISOString(),
-    options: { sovereignty: options.sovereignty !== false, moveBots: options.moveBots !== false, ordersAndJobs: options.ordersAndJobs !== false },
+    options: { sovereignty: options.sovereignty !== false, moveBots: options.moveBots !== false,
+      ships: options.ships === undefined ? options.moveBots !== false : options.ships !== false,
+      ordersAndJobs: options.ordersAndJobs !== false },
     // A trial run for some corporations keeps the others' earlier results.
     corporations: trial ? { ...previous } : {},
     errors: [],

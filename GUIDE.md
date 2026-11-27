@@ -184,12 +184,18 @@ player) gets:
   skip both. Systems someone else already holds are left alone;
 - 2B ISK in its wallet;
 - its bots docked in its structures (miners and planetary pilots at the
-  Athanor, builders at the Raitaru, everyone else at the headquarters);
+  Athanor, builders at the Raitaru, everyone else at the headquarters), and
+  each miner, security, pirate, sovereignty and trade pilot handed the next
+  ship on its role's ladder: hull and parts go into its hangar and it boards
+  and fits them, so null-sec work does not wait on trips to Jita;
 - a few market orders at the headquarters and manufacturing jobs at the
   Raitaru.
 
 The director waits while the seed runs and picks up afterwards with each
-corporation's new headquarters as home. Progress is saved per corporation
+corporation's new headquarters as home. Each claimed system without
+sovereignty gets a neutral Sovereignty Hub; sovereignty pilots capture their
+corporation's claims first, and each capture frees a claim, so territory
+keeps spreading. Progress is saved per corporation
 and step, so running it again only finishes what is missing, including after
 a restart part-way through. It cannot be undone except from a backup of the
 save, so take one first.

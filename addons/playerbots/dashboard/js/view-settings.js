@@ -125,7 +125,7 @@ function pageHtml(effectiveAutowork, roster) {
   <div class="panel"><div class="panel-head"><div><h2>${icon("world")}World seed</h2><p>Optional. Skips the slow start: every corporation gets its own null-sec region, an Astrahus headquarters, a Raitaru and an Athanor (online, fuelled, with service modules), 3 claimed systems, 2B ISK, and its bots docked in its structures. Written straight into the game data; nothing is flown or bought. Running it again only finishes what is missing.</p></div></div>
     <div class="panel-body"><div class="toolbar"><button type="button" class="btn ghost" id="world-plan">${icon("list")}<span>Preview the plan</span></button>
       <label class="check"><input type="checkbox" id="world-sov" checked> Sovereignty in claimed systems (founds an alliance for corporations without one)</label>
-      <label class="check"><input type="checkbox" id="world-move" checked> Move bots into their structures now</label>
+      <label class="check"><input type="checkbox" id="world-move" checked> Move bots into their structures now and give each its next role ship</label>
       <label class="check"><input type="checkbox" id="world-market" checked> Market orders and manufacturing jobs</label></div>
     <div id="world-plan-view"></div>
     <div class="toolbar" style="margin-top:10px"><label class="stack">Type SEED NEW EDEN to confirm<input class="field" id="world-confirm" autocomplete="off" spellcheck="false"></label><button type="button" class="btn primary" id="world-start">${icon("check")}<span>Seed New Eden</span></button></div>
