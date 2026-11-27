@@ -172,10 +172,17 @@ function contestedPairs() {
   return [...pairs.values()];
 }
 
+function allianceOf(corporationID) {
+  try { return positiveID((require("../corporation/corporationState").getCorporationRecord(corporationID) || {}).allianceID); } catch (_) { return 0; }
+}
+
+// A war between the two corporations or their alliances.
 function findWar(wars, left, right) {
+  const leftOwners = new Set([left, allianceOf(left)].filter(Boolean));
+  const rightOwners = new Set([right, allianceOf(right)].filter(Boolean));
   return wars.listAllWars().find((war) => !war.timeFinished &&
-    ((Number(war.declaredByID) === left && Number(war.againstID) === right) ||
-     (Number(war.declaredByID) === right && Number(war.againstID) === left)));
+    ((leftOwners.has(Number(war.declaredByID)) && rightOwners.has(Number(war.againstID))) ||
+     (rightOwners.has(Number(war.declaredByID)) && leftOwners.has(Number(war.againstID)))));
 }
 
 // War status for every contested pair, for the map.
@@ -211,6 +218,10 @@ async function declareTerritoryWars(bots = [], options = {}) {
   for (const pair of pairs) {
     const key = pairKey(pair.left, pair.right);
     if (findWar(wars, pair.left, pair.right)) { lastWarAttempt.delete(key); continue; }
+    if (allianceOf(pair.left) && allianceOf(pair.left) === allianceOf(pair.right)) {
+      lastWarAttempt.set(key, { atMs: nowMs, reason: "same-alliance" });
+      continue;
+    }
     const previous = lastWarAttempt.get(key);
     if (previous && nowMs - previous.atMs < WAR_ATTEMPT_INTERVAL_MS) continue;
     let reason = "no-bot-run-claimant-with-war-headquarters";
@@ -245,5 +256,6 @@ module.exports = {
   getContestedSystemsForCorporation,
   getTerritoryWars,
   declareTerritoryWars,
-  _testing: { reset: () => { cache = null; adjacency = null; lastWarAttempt.clear(); }, headquartersSystems },
+  headquartersSystems: (id) => [...(headquartersSystems(positiveID(id)) || [])],
+  _testing: { reset: () => { cache = null; adjacency = null; lastWarAttempt.clear(); } },
 };
