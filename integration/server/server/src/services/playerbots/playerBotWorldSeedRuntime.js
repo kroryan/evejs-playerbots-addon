@@ -456,6 +456,11 @@ function outfitBot(job) {
   const role = bot && SHIP_ROLE_FOR_SPECIALTY[bot.specialty];
   if (!role) return false;
   const operations = require("./playerBotOperationRuntime");
+  const current = operations.getOperation(job.characterID);
+  if (current && current.worldSeed === true && ["active", "holding"].includes(current.status)) {
+    scheduleStep(job.characterID); // an earlier run's upgrade: just make sure it is stepped
+    return false;
+  }
   if (operations.hasActiveOperation(job.characterID)) {
     try { operations.stopOperation(job.characterName); } catch (_) { /* the upgrade start reports it */ }
   }
@@ -472,7 +477,17 @@ function outfitBot(job) {
     `world-seed:ship:${job.characterID}:${rung.hullTypeID}`);
   const result = operations.startSeededShipUpgrade(bot.characterName, role, rung, job.target);
   if (!result.success) throw new Error(result.message);
+  scheduleStep(job.characterID);
   return true;
+}
+
+// Operations advance through one step job per pilot; a new operation needs one.
+function scheduleStep(characterID) {
+  try {
+    const autonomy = require("./playerBotAutonomyRuntime");
+    const ensure = autonomy.ensureActiveBotStep || (autonomy._testing && autonomy._testing.ensureActiveBotStep);
+    if (typeof ensure === "function") Promise.resolve(ensure(characterID)).catch(() => {});
+  } catch (_) { /* the pilot's next think schedules it */ }
 }
 
 function moveBot(job) {

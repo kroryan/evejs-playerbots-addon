@@ -1551,6 +1551,7 @@ function formatAutonomyStatus(options = {}) {
 }
 
 module.exports = {
+  ensureActiveBotStep,
   _testing: {
     ensureActiveBotStep,
     runIdleRosterDirectorBatch,
