@@ -761,8 +761,8 @@
     "server/src/services/playerbots/playerBotMapIntelRuntime.js": {
       "baseSha256": null,
       "subsystem": "playerbots-core",
-      "sourceSha256": "4a2667ec618e969e0540aff143613e13b7dcdab45df0b46e7dd62ea418ee7fc9",
-      "overlaySha256": "4a2667ec618e969e0540aff143613e13b7dcdab45df0b46e7dd62ea418ee7fc9"
+      "sourceSha256": "bbc3e6c3ba36740427afc242de412e4161426f02b964a633222f7535f03e3c11",
+      "overlaySha256": "bbc3e6c3ba36740427afc242de412e4161426f02b964a633222f7535f03e3c11"
     },
     "server/src/services/playerbots/playerBotMarketMakerRuntime.js": {
       "baseSha256": null,

@@ -341,7 +341,9 @@ function buildCorporation(global, corporationID, players) {
     name: record.corporationName || `Corporation ${corporationID}`,
     ticker: String(record.tickerName || record.ticker || ""),
     allianceID,
-    memberCount: Number(state.getCorporationMemberCount?.(corporationID)) || 0,
+    memberCount: Math.max(bots.length, (() => {
+      try { return (state.getCharacterIDsInCorporation(corporationID) || []).length; } catch (_) { return 0; }
+    })()),
     botCount: bots.length,
     botRun: botSet.has(Number(record.ceoID)),
     online: members,
