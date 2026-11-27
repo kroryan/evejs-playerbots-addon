@@ -1025,8 +1025,8 @@
     "server/src/services/playerbots/playerBotWorldSeedRuntime.js": {
       "baseSha256": null,
       "subsystem": "playerbots-core",
-      "sourceSha256": "a78fb9d21605f93741c8f56c40e674e853582c15b499c7bd9478c50a7e09b6f2",
-      "overlaySha256": "a78fb9d21605f93741c8f56c40e674e853582c15b499c7bd9478c50a7e09b6f2"
+      "sourceSha256": "567be9785b13c25f472bce85c7884a68c974cfcd056a68be8862d6ccb80cc8ba",
+      "overlaySha256": "567be9785b13c25f472bce85c7884a68c974cfcd056a68be8862d6ccb80cc8ba"
     },
     "server/src/services/scheduler/durableScheduler.js": {
       "baseSha256": "456870d45bbb4223608ca5a74bd4306d97d284c0145b669c4bee6e94051dfeb5",

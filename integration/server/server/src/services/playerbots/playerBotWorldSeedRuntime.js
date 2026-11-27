@@ -251,16 +251,22 @@ function deploymentPosition(systemID, typeIDValue, index) {
   const placement = require("../structure/structureDeploymentPlacement");
   const celestials = (world.getCelestialsForSystem(systemID) || []).filter((c) => Number(c.groupID) === 7);
   const anchors = celestials.length ? celestials : (world.getCelestialsForSystem(systemID) || []);
-  const pick = anchors[index % Math.max(1, anchors.length)] || {};
-  const base = pick.position || { x: Number(pick.x) || 0, y: Number(pick.y) || 0, z: Number(pick.z) || 0 };
-  for (const radius of [3_000_000, 6_000_000, 12_000_000, 25_000_000, 50_000_000]) {
-    for (let step = 0; step < 16; step += 1) {
-      const angle = Math.PI * 2 * (step + index * 5) / 16;
-      const offset = { x: Math.round(Math.cos(angle) * radius), y: 0, z: Math.round(Math.sin(angle) * radius) };
-      const position = { x: Number(base.x || 0) + offset.x, y: Number(base.y || 0), z: Number(base.z || 0) + offset.z };
-      try {
-        if (placement.validateDeploymentPlacement({ solarSystemID: systemID, typeID: typeIDValue, position, offset }).success) return position;
-      } catch (_) { /* try the next spot */ }
+  // Out from a planet's surface, clear of it and of everything else. There
+  // is no deploying ship, so no deployment-distance offset is checked.
+  for (let attempt = 0; attempt < Math.max(1, anchors.length); attempt += 1) {
+    const pick = anchors[(index + attempt) % Math.max(1, anchors.length)] || {};
+    const base = pick.position || { x: Number(pick.x) || 0, y: Number(pick.y) || 0, z: Number(pick.z) || 0 };
+    const surface = Math.max(0, Number(pick.radius) || 0);
+    for (const clearance of [5_000_000, 10_000_000, 25_000_000, 60_000_000]) {
+      for (let step = 0; step < 12; step += 1) {
+        const angle = Math.PI * 2 * (step + index * 4) / 12;
+        const distance = surface + clearance;
+        const position = { x: Number(base.x || 0) + Math.round(Math.cos(angle) * distance), y: Number(base.y || 0),
+          z: Number(base.z || 0) + Math.round(Math.sin(angle) * distance) };
+        try {
+          if (placement.validateDeploymentPlacement({ solarSystemID: systemID, typeID: typeIDValue, position }).success) return position;
+        } catch (_) { /* try the next spot */ }
+      }
     }
   }
   return null;
@@ -356,9 +362,16 @@ function seedAlliance(entry) {
   if (entry.allianceID) return;
   const corporationState = require("../corporation/corporationState");
   const base = entry.name.replace(/[^A-Za-z0-9 ]/g, "").trim().slice(0, 40) || `Corporation ${entry.corporationID}`;
-  const result = corporationState.createCustomAllianceForCorporation(entry.ceoID, entry.corporationID, `${base} Dominion`, {
-    shortName: base.replace(/[^A-Z]/gi, "").slice(0, 4).toUpperCase() || "SEED",
-  });
+  // Short names must be unique: try initials, then letters with a number.
+  const letters = base.replace(/[^A-Z]/gi, "").toUpperCase() || "SEED";
+  const initials = base.split(/\s+/).map((word) => word[0] || "").join("").toUpperCase();
+  const candidates = [initials.slice(0, 5), `${letters.slice(0, 3)}D`, ...[1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => `${letters.slice(0, 3)}${n}`)]
+    .filter((name, i, list) => name.length >= 2 && list.indexOf(name) === i);
+  let result = null;
+  for (const shortName of candidates) {
+    result = corporationState.createCustomAllianceForCorporation(entry.ceoID, entry.corporationID, `${base} Dominion`, { shortName });
+    if (!result || result.errorMsg !== "ALLIANCE_SHORT_NAME_TAKEN") break;
+  }
   if (!result || result.success === false) throw new Error(result && result.errorMsg || "alliance creation refused");
   entry.allianceID = positiveID(corporationState.getCorporationRecord(entry.corporationID)?.allianceID) ||
     positiveID(result.data && (result.data.allianceID || result.data));
