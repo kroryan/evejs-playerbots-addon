@@ -274,10 +274,20 @@ function deploymentPosition(systemID, typeIDValue, index) {
 
 // Mirrors EveJS's own online automation (structureAutoState), without the
 // waiting: anchor, fast-forward the timers, install the core, dock online.
-function bringOnline(structureID) {
+// Like that automation, each action is followed by a structure tick (which
+// applies the timer transitions) and a scene sync.
+async function bringOnline(structureID) {
   const structureState = require("../structure/structureState");
   const { STRUCTURE_STATE, STRUCTURE_SERVICE_ID, STRUCTURE_SERVICE_STATE } = require("../structure/structureConstants");
-  for (let step = 0; step < 16; step += 1) {
+  const settle = async (structure) => {
+    if (typeof structureState.tickStructures === "function") structureState.tickStructures(Date.now());
+    try {
+      const space = require("../../space/runtime");
+      if (structure && typeof space.syncStructureSceneState === "function") space.syncStructureSceneState(Number(structure.solarSystemID));
+    } catch (_) { /* no scene loaded */ }
+    await new Promise((resolve) => deps.schedule(resolve, 25));
+  };
+  for (let step = 0; step < 24; step += 1) {
     const structure = structureState.getStructureByID(structureID, { refresh: false });
     if (!structure || structure.destroyedAt) throw new Error("structure vanished while coming online");
     const current = Number(structure.state) || 0;
@@ -295,8 +305,10 @@ function bringOnline(structureID) {
       result = structureState.setStructureServiceState(structureID, STRUCTURE_SERVICE_ID.DOCKING, STRUCTURE_SERVICE_STATE.ONLINE);
     } else throw new Error(`structure is in state ${current}, which the seed cannot advance`);
     if (result && result.success === false) throw new Error(result.errorMsg || "structure state change refused");
+    await settle(structure);
   }
-  throw new Error("structure did not come online");
+  const last = structureState.getStructureByID(structureID, { refresh: false }) || {};
+  throw new Error(`structure did not come online (state ${last.state}, core ${last.hasQuantumCore === true})`);
 }
 
 function grant(ownerID, locationID, flagID, entries, receiptKey) {
@@ -330,7 +342,7 @@ function fitAndFuel(entry, spec, structureID) {
 async function seedStructures(entry) {
   const structureState = require("../structure/structureState");
   entry.structures = entry.structures || {};
-  STRUCTURES.forEach((spec, index) => {
+  for (const [index, spec] of STRUCTURES.entries()) {
     let structure = findSeeded(entry.corporationID, spec.role);
     if (!structure) {
       const position = deploymentPosition(entry.homeSystemID, spec.typeID, index);
@@ -347,10 +359,10 @@ async function seedStructures(entry) {
       structure = result.data;
     }
     const structureID = positiveID(structure.structureID || structure.itemID);
-    bringOnline(structureID);
+    await bringOnline(structureID);
     fitAndFuel(entry, spec, structureID);
     entry.structures[spec.role] = structureID;
-  });
+  }
   // The Astrahus is the corporation's headquarters for its bots.
   const hq = entry.structures.headquarters;
   const { headquartersStructureDevFlags } = require("./playerBotPiWorkPolicy");

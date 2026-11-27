@@ -35,9 +35,10 @@ Module.prototype.require = function require(id) {
 const seed = require(path.join(__dirname,
   "../integration/server/server/src/services/playerbots/playerBotWorldSeedRuntime.js"));
 
-test("a seeded structure goes from unanchored to online with docking", () => {
+test("a seeded structure goes from unanchored to online with docking", async () => {
   structure = { structureID: 1, state: S.UNANCHORED, hasQuantumCore: false, serviceStates: {} };
-  const online = seed._testing.bringOnline(1);
+  seed._testing.setDeps({ schedule: (callback) => setImmediate(callback) });
+  const online = await seed._testing.bringOnline(1);
   assert.equal(online.state, S.SHIELD_VULNERABLE);
   assert.deepEqual(calls, ["anchor", "ff", "core", "dock", "ff"]);
 });
