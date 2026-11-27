@@ -113,6 +113,7 @@ function buildGlobal() {
   const mining = {};
   const combat = {};
   const activity = {};
+  const activityBySystem = {}; // systemID -> { kind: count }
   const ops = [];
   for (const operation of operations) {
     const character = readSharedCharacterRecord(operation.characterID) || {};
@@ -135,7 +136,9 @@ function buildGlobal() {
       systemID = positiveID(operation.targetSystemID) || locationSystem(operation.homeStationID, structuresByID) || here;
       if (systemID) combat[systemID] = (combat[systemID] || 0) + 1;
     }
-    ops.push([corporationID, operation.kind, systemID || here, ends]);
+    const at = systemID || here;
+    if (at && !ends) (activityBySystem[at] ||= {})[operation.kind] = (activityBySystem[at][operation.kind] || 0) + 1;
+    ops.push([corporationID, operation.kind, at, ends]);
   }
   const routeList = [...routes.values()].sort((a, b) => b.count - a.count).slice(0, 400).map((entry) => {
     const [topCorp] = [...entry.corporations].sort((a, b) => b[1] - a[1])[0] || [0];
@@ -204,6 +207,11 @@ function buildGlobal() {
     mining,
     combat,
     activity,
+    // The main job in each system with bot work: [kind, pilots there working].
+    activityBySystem: Object.fromEntries(Object.entries(activityBySystem).map(([id, kinds]) => {
+      const [kind] = Object.entries(kinds).sort((a, b) => b[1] - a[1])[0];
+      return [id, [kind, Object.values(kinds).reduce((sum, n) => sum + n, 0)]];
+    })),
     kills,
     recentKills,
     shipNames,
@@ -390,12 +398,17 @@ function baseInSystem(systemID, corporationID, needBelts) {
   return { error: "The system has no NPC station and no Upwell station of the corporation to work from." };
 }
 
-// Operations resolve pilots by name.
+// Operations resolve pilots by name. "Defend" alternates gate campers (on the
+// system's stargates) and belt and anomaly patrols.
 function startDispatch(entry) {
   const operations = require("./playerBotOperationRuntime");
-  return entry.action === "mine"
-    ? operations.startMining(entry.characterName, 3, { stationID: entry.stationID })
-    : operations.startCombat(entry.characterName, "security", { patrolSystemID: entry.systemID, patrolStationID: entry.stationID });
+  if (entry.action === "mine") return operations.startMining(entry.characterName, 3, { stationID: entry.stationID });
+  const options = { patrolSystemID: entry.systemID, patrolStationID: entry.stationID };
+  if (entry.role === "gate-camp") {
+    const camp = operations.startCombat(entry.characterName, "gate-camp", options);
+    if (camp && camp.success) return camp;
+  }
+  return operations.startCombat(entry.characterName, "security", options);
 }
 
 function retryDispatch() {
@@ -449,7 +462,9 @@ function commandBots(corporationIDValue, systemIDValue, actionValue, countValue)
   let started = 0;
   let switching = 0;
   const errors = [];
+  let picked = 0;
   const entryFor = (candidate) => ({ action, systemID, stationID: base.stationID, corporationID,
+    role: action === "defend" && (picked++ % 2 === 0) ? "gate-camp" : "patrol",
     untilMs: Date.now() + DISPATCH_TIMEOUT_MS, characterID: candidate.characterID, characterName: candidate.bot.characterName });
   for (const candidate of candidates) {
     if (started + switching >= count) break;
@@ -472,7 +487,7 @@ function commandBots(corporationIDValue, systemIDValue, actionValue, countValue)
     if (typeof dispatchTimer.unref === "function") dispatchTimer.unref();
   }
   globalCache = null;
-  const verb = action === "mine" ? "mining" : "defending";
+  const verb = action === "mine" ? "mining" : "gate camping and patrolling";
   const parts = [];
   if (started) parts.push(`${started} pilot${started === 1 ? "" : "s"} now ${verb}`);
   if (switching) parts.push(`${switching} finishing their current job first`);

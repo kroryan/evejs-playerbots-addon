@@ -5268,6 +5268,13 @@ function startCombat(botQuery, mode = "security", options = {}) {
     }
     patrolTarget = { success: true, stationID: normalizePositiveInteger(options.patrolStationID), systemID: patrolSystemID,
       hops: route.hops, risk: route.risk, mode: "belt" };
+    if (normalizedMode === "gate-camp") {
+      // Camp one of the system's stargates, spread across pilots.
+      const gates = (worldData.getStargatesForSystem(patrolSystemID) || [])
+        .map((gate) => normalizePositiveInteger(gate.itemID || gate.stargateID)).filter(Boolean).sort((a, b) => a - b);
+      if (!gates.length) return { success: false, message: `System ${patrolSystemID} has no stargates to camp.` };
+      patrolTarget = { ...patrolTarget, mode: "gate-camp", patrolEntityID: gates[Number(bot.characterID) % gates.length] };
+    }
     if (!patrolTarget.stationID) return { success: false, message: "A station in the patrol system is required." };
   }
   const anomalyTarget = !defensiveTargetID && !miningEscortTarget && !patrolSystemID && normalizedMode === "security"
