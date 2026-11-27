@@ -174,8 +174,8 @@ function listMapCorporations(query = "") {
     if (state.isNpcCorporationID && state.isNpcCorporationID(id)) continue;
     const record = state.getCorporationRecord(id);
     if (!record) continue;
-    let hq = [];
-    try { hq = require("./playerBotTerritoryClaimsRuntime").headquartersSystems(id); } catch (_) { hq = []; }
+    let hq = []; // null-sec systems with its anchored Upwell stations
+    try { hq = require("./playerBotTerritoryClaimsRuntime").anchorSystems(id); } catch (_) { hq = []; }
     out.push([id, String(record.corporationName || `Corporation ${id}`), botCounts.get(id) || 0, hq]);
   }
   out.sort((a, b) => a[1].localeCompare(b[1]));

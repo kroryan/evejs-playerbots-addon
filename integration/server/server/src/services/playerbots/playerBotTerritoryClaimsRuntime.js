@@ -1,19 +1,26 @@
 "use strict";
 
-// Territory claims for the Territory Map add-on. An operator claims solar
-// systems for a corporation: at most MAX_CLAIMS per corporation, the first at
-// the corporation's headquarters (its station or one of its structures), each
-// further one linked by stargate to a system it already holds. Systems claimed
-// by more than one corporation are contested; a bot-run claimant declares a
+// Territory claims for the Territory Map add-on. Claims are null-sec only. A
+// corporation first anchors an Upwell station (a dockable structure) in
+// null-sec; that system becomes its anchor claim, and it may then claim up to
+// MAX_CLAIMS systems in all, each linked by stargate to one it already holds.
+// Bot-run corporations claim on their own, one system at a time; the operator
+// can claim and unclaim for any corporation from the map. Systems claimed by
+// more than one corporation are contested; a bot-run claimant declares a
 // normal EveJS corporation war on its rival (bill, 24-hour start timer and
 // Crimewatch rules all apply), and its war pilots patrol contested systems.
+// Losing the last Upwell station in its claims drops a corporation's claims.
 
 const STORE_PATH = "/_territoryClaims";
 const MAX_CLAIMS = 5;
 const WAR_ATTEMPT_INTERVAL_MS = 30 * 60 * 1000;
+const EXPANSION_INTERVAL_MS = 30 * 60 * 1000;
+const KSPACE_MAX_SYSTEM_ID = 31_000_000;
+const STRUCTURE_STATE_ANCHORED_MIN = 100; // states below are unknown, unanchored and anchoring
 
 let cache = null;
 const lastWarAttempt = new Map(); // "a:b" -> { atMs, reason }
+const lastExpansionAtMs = new Map(); // corporationID -> ms
 
 const positiveID = (value) => {
   const id = Math.trunc(Number(value));
@@ -62,44 +69,85 @@ function neighbours(systemID) {
   return adjacency.get(systemID) || new Set();
 }
 
-function systemExists(systemID) {
-  try { return Boolean(require("../../space/worldData").getSolarSystemByID(systemID)); } catch (_) { return neighbours(systemID).size > 0; }
+function systemSecurity(systemID) {
+  try {
+    const system = require("../../space/worldData").getSolarSystemByID(systemID);
+    if (!system) return null;
+    const security = Number(system.security ?? system.securityStatus);
+    return Number.isFinite(security) ? security : null;
+  } catch (_) { return null; }
 }
 
-// Systems that count as a corporation's headquarters for its first claim.
-function headquartersSystems(corporationID) {
-  const systems = new Set();
-  const record = require("../corporation/corporationState").getCorporationRecord(corporationID);
-  if (!record) return null;
+function isNullsec(systemID) {
+  const security = systemSecurity(systemID);
+  return systemID < KSPACE_MAX_SYSTEM_ID && security !== null && security <= 0;
+}
+
+function isAnchoredUpwellStation(structure) {
+  if (!structure || structure.destroyedAt || structure.unanchoring) return false;
+  if (Number(structure.state) < STRUCTURE_STATE_ANCHORED_MIN) return false;
   try {
-    const station = record.stationID && require("../../space/worldData").getStationByID(record.stationID);
-    if (station && positiveID(station.solarSystemID)) systems.add(positiveID(station.solarSystemID));
-  } catch (_) { /* no NPC headquarters */ }
-  try {
-    for (const structure of require("../structure/structureState").listStructures()) {
-      if (!structure || structure.destroyedAt || structure.unanchoring) continue;
-      if (positiveID(structure.ownerCorpID || structure.ownerID) !== corporationID) continue;
-      if (positiveID(structure.solarSystemID)) systems.add(positiveID(structure.solarSystemID));
+    const type = require("../structure/structureState").getStructureTypeByID(positiveID(structure.typeID));
+    return Boolean(type && type.dockable);
+  } catch (_) { return false; }
+}
+
+function listStructures() {
+  const structureState = require("../structure/structureState");
+  return typeof structureState.peekStructures === "function" ? structureState.peekStructures() : structureState.listStructures();
+}
+
+// corporationID -> Set of null-sec systems with its anchored Upwell stations.
+function anchorsByCorporation() {
+  const anchors = new Map();
+  for (const structure of listStructures()) {
+    const corporationID = positiveID(structure && (structure.ownerCorpID || structure.ownerID));
+    const systemID = positiveID(structure && structure.solarSystemID);
+    if (!corporationID || !systemID || !isNullsec(systemID) || !isAnchoredUpwellStation(structure)) continue;
+    if (!anchors.has(corporationID)) anchors.set(corporationID, new Set());
+    anchors.get(corporationID).add(systemID);
+  }
+  return anchors;
+}
+
+function anchorSystems(corporationID) {
+  return anchorsByCorporation().get(corporationID) || new Set();
+}
+
+// Keep only claims connected to the first one.
+function connectedFromFirst(systems) {
+  if (!systems.length) return [];
+  const remaining = new Set(systems);
+  const reached = new Set([systems[0]]);
+  const queue = [systems[0]];
+  while (queue.length) {
+    for (const next of neighbours(queue.shift())) {
+      if (remaining.has(next) && !reached.has(next)) { reached.add(next); queue.push(next); }
     }
-  } catch (_) { /* structures unavailable */ }
-  return systems;
+  }
+  return systems.filter((id) => reached.has(id));
 }
 
 function claim(corporationIDValue, systemIDValue) {
   const corporationID = positiveID(corporationIDValue);
   const systemID = positiveID(systemIDValue);
   if (!corporationID || !systemID) return { success: false, statusCode: 400, message: "A corporation and a system are required." };
-  if (!systemExists(systemID)) return { success: false, statusCode: 404, message: "Unknown solar system." };
-  const hq = headquartersSystems(corporationID);
-  if (!hq) return { success: false, statusCode: 404, message: "Unknown corporation." };
+  if (systemSecurity(systemID) === null) return { success: false, statusCode: 404, message: "Unknown solar system." };
+  if (!isNullsec(systemID)) return { success: false, statusCode: 409, message: "Only null-sec systems can be claimed." };
+  if (!require("../corporation/corporationState").getCorporationRecord(corporationID)) {
+    return { success: false, statusCode: 404, message: "Unknown corporation." };
+  }
   const state = load();
   const held = state.claims[corporationID] || [];
   if (held.includes(systemID)) return { success: false, statusCode: 409, message: "The corporation already claims this system." };
   if (held.length >= MAX_CLAIMS) return { success: false, statusCode: 409, message: `A corporation can claim at most ${MAX_CLAIMS} systems.` };
-  if (!held.length && !hq.has(systemID)) {
-    return { success: false, statusCode: 409, message: hq.size
-      ? "The first claim must be the corporation's headquarters system (its station or one of its structures)."
-      : "The corporation has no headquarters station or structure to claim from." };
+  if (!held.length) {
+    const anchors = anchorSystems(corporationID);
+    if (!anchors.has(systemID)) {
+      return { success: false, statusCode: 409, message: anchors.size
+        ? "The first claim must be a null-sec system where the corporation has an anchored Upwell station."
+        : "The corporation needs an anchored Upwell station in null-sec before it can claim territory." };
+    }
   }
   if (held.length && !held.some((id) => neighbours(id).has(systemID))) {
     return { success: false, statusCode: 409, message: "The system must be linked by stargate to one the corporation already claims." };
@@ -109,25 +157,14 @@ function claim(corporationIDValue, systemIDValue) {
 }
 
 // Removing a claim also drops claims that are no longer connected to the
-// headquarters claim; removing the headquarters claim drops them all.
+// anchor claim; removing the anchor claim drops them all.
 function unclaim(corporationIDValue, systemIDValue) {
   const corporationID = positiveID(corporationIDValue);
   const systemID = positiveID(systemIDValue);
   const state = load();
   const held = state.claims[corporationID] || [];
   if (!held.includes(systemID)) return { success: false, statusCode: 404, message: "The corporation does not claim this system." };
-  let kept = [];
-  if (held[0] !== systemID) {
-    const remaining = new Set(held.filter((id) => id !== systemID));
-    const reached = new Set([held[0]]);
-    const queue = [held[0]];
-    while (queue.length) {
-      for (const next of neighbours(queue.shift())) {
-        if (remaining.has(next) && !reached.has(next)) { reached.add(next); queue.push(next); }
-      }
-    }
-    kept = held.filter((id) => reached.has(id));
-  }
+  const kept = held[0] === systemID ? [] : connectedFromFirst(held.filter((id) => id !== systemID));
   const claims = { ...state.claims };
   if (kept.length) claims[corporationID] = kept; else delete claims[corporationID];
   save({ claims });
@@ -200,8 +237,62 @@ function getTerritoryWars() {
   return out;
 }
 
+// Director global maintenance. Claims whose anchor station is gone move to
+// another claimed system with a station, or are dropped. Bot-run corporations
+// with a station claim their anchor system, then one neighbouring null-sec
+// system per interval up to MAX_CLAIMS, preferring systems nobody claims.
+function reconcileClaims(bots = [], options = {}) {
+  const nowMs = typeof options.now === "function" ? options.now() : Date.now();
+  const anchors = anchorsByCorporation();
+  const state = load();
+  const claims = {};
+  const summary = { dropped: 0, claimed: 0 };
+  for (const [corporationID, systems] of Object.entries(state.claims)) {
+    const held = anchors.get(Number(corporationID)) || new Set();
+    const nullsec = systems.filter((id) => isNullsec(id));
+    const anchorIndex = nullsec.findIndex((id) => held.has(id));
+    const kept = anchorIndex < 0 ? [] : connectedFromFirst([nullsec[anchorIndex], ...nullsec.filter((_, i) => i !== anchorIndex)]);
+    summary.dropped += systems.length - kept.length;
+    if (kept.length) claims[corporationID] = kept;
+  }
+  const autoclaim = String(process.env.EVEJS_PLAYER_BOTS_TERRITORY_AUTOCLAIM ?? "1").trim() !== "0";
+  if (autoclaim) {
+    const rosterIDs = new Set((Array.isArray(bots) ? bots : []).map((bot) => Number(bot.characterID)));
+    const corporationState = require("../corporation/corporationState");
+    const claimants = new Map();
+    for (const [corporationID, systems] of Object.entries(claims)) {
+      for (const id of systems) claimants.set(id, (claimants.get(id) || 0) + 1);
+    }
+    for (const [corporationID, stations] of [...anchors].sort((a, b) => a[0] - b[0])) {
+      const record = corporationState.getCorporationRecord(corporationID) || {};
+      if (record.isNPC === true || !rosterIDs.has(Number(record.ceoID))) continue; // bot-run only
+      const held = claims[corporationID] || [];
+      if (held.length >= MAX_CLAIMS) continue;
+      if (held.length && nowMs - (lastExpansionAtMs.get(corporationID) || 0) < EXPANSION_INTERVAL_MS) continue;
+      let next = 0;
+      if (!held.length) {
+        next = Math.min(...stations);
+      } else {
+        const candidates = new Set();
+        for (const id of held) for (const neighbour of neighbours(id)) {
+          if (!held.includes(neighbour) && isNullsec(neighbour)) candidates.add(neighbour);
+        }
+        next = [...candidates].sort((a, b) => Number(stations.has(b)) - Number(stations.has(a)) ||
+          (claimants.get(a) || 0) - (claimants.get(b) || 0) || a - b)[0] || 0;
+      }
+      if (!next) continue;
+      claims[corporationID] = [...held, next];
+      claimants.set(next, (claimants.get(next) || 0) + 1);
+      lastExpansionAtMs.set(corporationID, nowMs);
+      summary.claimed += 1;
+    }
+  }
+  if (JSON.stringify(claims) !== JSON.stringify(state.claims)) save({ claims });
+  return summary;
+}
+
 function structureHeadquarters(corporationID) {
-  const structure = require("../structure/structureState").listStructures().find((entry) => entry &&
+  const structure = listStructures().find((entry) => entry &&
     !entry.destroyedAt && !entry.unanchoring && positiveID(entry.ownerCorpID || entry.ownerID) === corporationID);
   return structure ? positiveID(structure.structureID || structure.itemID) : 0;
 }
@@ -256,6 +347,7 @@ module.exports = {
   getContestedSystemsForCorporation,
   getTerritoryWars,
   declareTerritoryWars,
-  headquartersSystems: (id) => [...(headquartersSystems(positiveID(id)) || [])],
-  _testing: { reset: () => { cache = null; adjacency = null; lastWarAttempt.clear(); } },
+  reconcileClaims,
+  anchorSystems: (id) => [...anchorSystems(positiveID(id))],
+  _testing: { reset: () => { cache = null; adjacency = null; lastWarAttempt.clear(); lastExpansionAtMs.clear(); } },
 };

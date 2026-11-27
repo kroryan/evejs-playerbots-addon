@@ -1,15 +1,19 @@
 "use strict";
 
-// Territory Map claims: first claim at headquarters, then stargate-adjacent,
-// at most five, contested when shared, and unclaiming drops disconnected claims.
+// Territory Map claims: null-sec only, anchored at an Upwell station, then
+// stargate-adjacent, at most five, contested when shared, and bot-run
+// corporations expand on their own.
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const path = require("node:path");
 const Module = require("node:module");
 
-// Systems 1-2-3-4-5-6-7 in a line; corp 10 has a structure in 1, corp 20 in 3.
-const links = [[1, 2], [2, 3], [3, 4], [4, 5], [5, 6], [6, 7]];
+// Systems 1-2-3-4-5-6-7 in a line, all null-sec except 7; 8 is high-sec.
+// Corp 10 (bot CEO 1001) has an Astrahus in 1, corp 20 (player) one in 3.
+const links = [[1, 2], [2, 3], [3, 4], [4, 5], [5, 6], [6, 7], [1, 8]];
+const security = { 1: -0.2, 2: -0.1, 3: 0, 4: -0.5, 5: -0.4, 6: -0.3, 7: 0.3, 8: 0.9 };
 let stored = null;
+let structures = [];
 const stubs = {
   "../../gameStore/tableRepository": { createTableRepository: () => ({
     read: () => ({ success: Boolean(stored), data: stored }),
@@ -17,11 +21,13 @@ const stubs = {
     ensureTable() {}, flushTableSync: () => ({ success: true }),
   }) },
   "./playerBotMapApiRuntime": { buildStaticMap: () => ({ links }) },
-  "../../space/worldData": { getSolarSystemByID: (id) => (id >= 1 && id <= 7 ? { id } : null), getStationByID: () => null },
-  "../corporation/corporationState": { getCorporationRecord: (id) => ([10, 20].includes(id) ? { corporationID: id } : null) },
-  "../structure/structureState": { listStructures: () => [
-    { structureID: 900, ownerCorpID: 10, solarSystemID: 1 }, { structureID: 901, ownerCorpID: 20, solarSystemID: 3 },
-  ] },
+  "../../space/worldData": { getSolarSystemByID: (id) => (id in security ? { security: security[id] } : null) },
+  "../corporation/corporationState": { getCorporationRecord: (id) =>
+    ({ 10: { corporationID: 10, ceoID: 1001 }, 20: { corporationID: 20, ceoID: 2002 } })[id] || null },
+  "../structure/structureState": {
+    peekStructures: () => structures,
+    getStructureTypeByID: (typeID) => ({ 35832: { dockable: true }, 35841: { dockable: false } })[typeID] || null,
+  },
   "../corporation/warRuntimeState": { listAllWars: () => [] },
 };
 const originalRequire = Module.prototype.require;
@@ -32,24 +38,37 @@ const territory = require(path.join(__dirname,
   "../integration/server/server/src/services/playerbots/playerBotTerritoryClaimsRuntime.js"));
 // Dependencies load lazily, so the stubs stay in place for this file.
 
-function reset() { stored = null; territory._testing.reset(); }
+const station = (ownerCorpID, solarSystemID, extra = {}) =>
+  ({ structureID: 900 + solarSystemID, typeID: 35832, ownerCorpID, solarSystemID, state: 110, ...extra });
 
-test("first claim must be at headquarters, later ones adjacent", () => {
+function reset() {
+  stored = null;
+  structures = [station(10, 1), station(20, 3)];
+  territory._testing.reset();
+}
+
+test("claims need null-sec and start at an anchored Upwell station", () => {
   reset();
-  assert.equal(territory.claim(10, 2).success, false);
+  structures.push(station(10, 8)); // high-sec station: not an anchor
+  assert.match(territory.claim(10, 8).message, /null-sec/);
+  assert.match(territory.claim(10, 2).message, /anchored Upwell station/);
   assert.equal(territory.claim(10, 1).success, true);
   assert.equal(territory.claim(10, 3).success, false, "not adjacent to 1");
   assert.equal(territory.claim(10, 2).success, true);
-  assert.equal(territory.claim(10, 2).success, false, "duplicate");
   assert.equal(territory.claim(99, 1).success, false, "unknown corporation");
 });
 
-test("a corporation holds at most five claims", () => {
+test("anchoring, unanchoring and non-dockable structures are not anchors", () => {
+  reset();
+  structures = [station(10, 1, { state: 2 }), station(10, 2, { unanchoring: 1 }), station(10, 4, { typeID: 35841 })];
+  assert.deepEqual(territory.anchorSystems(10), []);
+  assert.match(territory.claim(10, 1).message, /needs an anchored Upwell station/);
+});
+
+test("a corporation holds at most five claims, all null-sec", () => {
   reset();
   for (const id of [1, 2, 3, 4, 5]) assert.equal(territory.claim(10, id).success, true, `claim ${id}`);
-  const sixth = territory.claim(10, 6);
-  assert.equal(sixth.success, false);
-  assert.match(sixth.message, /at most 5/);
+  assert.match(territory.claim(10, 6).message, /at most 5/);
 });
 
 test("shared systems are contested and persist", () => {
@@ -63,12 +82,39 @@ test("shared systems are contested and persist", () => {
   assert.equal(territory.getTerritoryWars()["10:20"].warID, 0);
 });
 
-test("unclaiming drops claims cut off from headquarters", () => {
+test("unclaiming drops claims cut off from the anchor claim", () => {
   reset();
   for (const id of [1, 2, 3, 4]) territory.claim(10, id);
   assert.deepEqual(territory.unclaim(10, 2).systems, [1]);
   for (const id of [2, 3]) territory.claim(10, id);
-  const result = territory.unclaim(10, 1);
-  assert.deepEqual(result.systems, []);
+  assert.deepEqual(territory.unclaim(10, 1).systems, []);
   assert.deepEqual(territory.getClaims(), {});
+});
+
+test("bot-run corporations claim around their station, one system per interval", () => {
+  reset();
+  const bots = [{ characterID: 1001 }];
+  let now = 1_000_000;
+  const clock = { now: () => now };
+  assert.equal(territory.reconcileClaims(bots, clock).claimed, 1);
+  assert.deepEqual(territory.getClaims(), { 10: [1] }, "the player corporation does not auto-claim");
+  assert.equal(territory.reconcileClaims(bots, clock).claimed, 0, "waits for the interval");
+  now += 31 * 60 * 1000;
+  assert.equal(territory.reconcileClaims(bots, clock).claimed, 1);
+  assert.deepEqual(territory.getClaims()[10], [1, 2], "high-sec neighbour 8 is skipped");
+  now += 31 * 60 * 1000;
+  territory.reconcileClaims(bots, clock);
+  assert.deepEqual(territory.getClaims()[10], [1, 2, 3]);
+});
+
+test("losing the anchor station moves or drops the claims", () => {
+  reset();
+  structures.push(station(10, 2));
+  for (const id of [1, 2, 3]) territory.claim(10, id);
+  structures = structures.filter((entry) => entry.solarSystemID !== 1);
+  territory.reconcileClaims([], {});
+  assert.deepEqual(territory.getClaims()[10], [2, 1, 3], "re-anchored at the station in 2");
+  structures = structures.filter((entry) => entry.ownerCorpID !== 10);
+  assert.equal(territory.reconcileClaims([], {}).dropped, 3);
+  assert.equal(territory.getClaims()[10], undefined);
 });

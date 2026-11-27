@@ -1816,10 +1816,14 @@ async function runDirectorInternal(bots = [], options = {}) {
         `[PlayerBots] Bot rivalry war planning was skipped: ${String(error && error.message || error).slice(0, 180)}.`,
       );
     }
-    // Territory Map claims: contested systems lead to a normal corporation war.
+    // Territory Map claims: bot corporations claim null-sec around their
+    // Upwell stations, and contested systems lead to a normal corporation war.
     try {
-      const territoryWar = await require("./playerBotTerritoryClaimsRuntime")
-        .declareTerritoryWars(allRosterBots, { humanControlledBotIDs });
+      const territory = require("./playerBotTerritoryClaimsRuntime");
+      const claimPass = territory.reconcileClaims(allRosterBots);
+      if (claimPass.claimed) summary.territoryClaimsMade = claimPass.claimed;
+      if (claimPass.dropped) summary.territoryClaimsDropped = claimPass.dropped;
+      const territoryWar = await territory.declareTerritoryWars(allRosterBots, { humanControlledBotIDs });
       if (territoryWar.declared) {
         summary.territoryWarsDeclared = 1;
         require("../../utils/logger").info(
