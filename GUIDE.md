@@ -160,6 +160,40 @@ touched. With **Seed a new roster when the reset finishes** ticked, work and
 seeding switch back on afterwards. A reset interrupted by a restart carries on
 when the Settings page is opened again. It cannot be undone.
 
+### World seed: start in null-sec without the wait
+
+**World seed** on the Settings page is optional. It gives every corporation a
+near-equal start in null-sec straight away, instead of waiting for bots to
+earn, buy, fly and anchor everything themselves. Nothing is simulated: it
+writes through EveJS's own structure, sovereignty, wallet and inventory
+modules. **Preview the plan** shows what each corporation gets before
+anything changes. Type `SEED NEW EDEN` and press **Seed New Eden** to run it.
+
+Each corporation (every corporation with bots, plus any with an online
+player) gets:
+
+- its own null-sec region, picked so corporations start as far apart as
+  possible. A corporation that already has a station in null-sec keeps that
+  region and that system as home;
+- an Astrahus (its headquarters, with a market hub and cloning center), a
+  Raitaru (manufacturing plant) and an Athanor (reprocessing facility),
+  anchored, cored, fuelled and online in its home system;
+- three claimed systems, the home system and two neighbours, with
+  sovereignty. A corporation without an alliance gets one (named after it)
+  because sovereignty belongs to alliances; untick the sovereignty box to
+  skip both. Systems someone else already holds are left alone;
+- 2B ISK in its wallet;
+- its bots docked in its structures (miners and planetary pilots at the
+  Athanor, builders at the Raitaru, everyone else at the headquarters);
+- a few market orders at the headquarters and manufacturing jobs at the
+  Raitaru.
+
+The director waits while the seed runs and picks up afterwards with each
+corporation's new headquarters as home. Progress is saved per corporation
+and step, so running it again only finishes what is missing, including after
+a restart part-way through. It cannot be undone except from a backup of the
+save, so take one first.
+
 ### Keeping the API private
 
 The Compose override does not publish port `26004`. Confirm the rendered

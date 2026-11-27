@@ -423,12 +423,29 @@ and so on; see [Roster and population](GUIDE.md#roster-and-population)).
 
 ---
 
+## Territory, intel and the world seed
+
+- **Territory claims.** Corporations claim null-sec around an Upwell
+  station they have anchored there: up to five systems, each a stargate jump
+  from one they hold. Bot corporations claim on their own; two corporations
+  claiming one system go to war over it.
+- **Map API.** The private API serves the starmap, live bots and
+  sovereignty, claims, an intel report (trade routes, mining, combat, kills,
+  wars, structures and one corporation's threats) and orders that send a
+  corporation's bots to mine or defend a system. The
+  [Territory Map add-on](https://github.com/ubermidas/evejs-territory-map)
+  is the browser front end.
+- **World seed.** An optional Settings action that starts every corporation
+  in its own null-sec region with structures, claims, sovereignty and ISK.
+  See [GUIDE.md](GUIDE.md#world-seed-start-in-null-sec-without-the-wait).
+
 ## More documentation
 
 | Document | What's in it |
 | --- | --- |
 | [GUIDE.md](GUIDE.md) | The operator's handbook: running the server, roster sizing, every chat command, how the bots behave, performance, troubleshooting, the fitting catalog |
 | [CHANGELOG.md](CHANGELOG.md) | What changed in each release, newest first |
+| [Territory Map](https://github.com/ubermidas/evejs-territory-map) | A separate add-on: a 3D map of New Eden with territory claims, intel and bot orders, using the map API below |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Repository layout, design rules, tests and building releases |
 | [PLAYERBOTS_ROADMAP.md](PLAYERBOTS_ROADMAP.md) | The project's long-form roadmap: shared rules, phases, and dated evidence from test servers |
 | [windows-native/README.md](windows-native/README.md) | The EVEJS Launcher package in detail |
