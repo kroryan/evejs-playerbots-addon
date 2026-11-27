@@ -73,6 +73,7 @@ const relocationCandidateCache = new Map();
 let directorBotAssignmentsCache = null;
 let directorLegacyAssignmentsCache = null;
 let queuedColonySetupCountCache = null;
+let legacyCorporationNamesChecked = false;
 
 function readState() {
   repo.ensureTable(TABLE);
@@ -1817,6 +1818,16 @@ async function runDirectorInternal(bots = [], options = {}) {
       require("../../utils/logger").warn(
         `[PlayerBots] Bot rivalry war planning was skipped: ${String(error && error.message || error).slice(0, 180)}.`,
       );
+    }
+    // Old "EVEJS <specialty>" bot corporations get generated names (once).
+    if (!legacyCorporationNamesChecked) {
+      legacyCorporationNamesChecked = true;
+      try {
+        const renamed = require("./playerBotRuntime").renameLegacyBotCorporations();
+        if (renamed.length) summary.legacyCorporationsRenamed = renamed.length;
+      } catch (error) {
+        require("../../utils/logger").warn(`[PlayerBots] Legacy corporation rename skipped: ${String(error && error.message || error).slice(0, 180)}.`);
+      }
     }
     // Territory Map claims: bot corporations claim null-sec around their
     // Upwell stations, and contested systems lead to a normal corporation war.

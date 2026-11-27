@@ -5,8 +5,8 @@
 // random unused name from this list, unless the dashboard's name library has
 // corporation names for the pilot's empire (those come first). When every name
 // here is in use, or the list is turned off with
-// EVEJS_PLAYER_BOTS_SCIFI_CORPORATION_NAMES=0, corporations are named after
-// their specialty as before.
+// EVEJS_PLAYER_BOTS_SCIFI_CORPORATION_NAMES=0, generateCorporationName() makes
+// an in-universe name from word lists that fit the corporation's specialty.
 
 const NAMES = Object.freeze([
   // Film
@@ -102,4 +102,43 @@ function chooseCorporationName(options = {}) {
   return null;
 }
 
-module.exports = { NAMES, chooseCorporationName, isEnabled, tickerCandidates };
+// Fallback names once the list above is used up: "<prefix> <specialty word>",
+// e.g. "Kestrel Freight Consortium". Never the old "EVEJS <specialty>" names.
+const PREFIXES = Object.freeze([
+  "Kestrel", "Aurora", "Vanguard", "Obsidian", "Halcyon", "Meridian", "Corvus", "Tamarind",
+  "Solace", "Ironclad", "Zenith", "Cobalt", "Sable", "Perihelion", "Ardent", "Vesper",
+  "Talon", "Nimbus", "Helix", "Bastion", "Calyx", "Driftwood", "Ember", "Gallowglass",
+  "Harrow", "Ionis", "Juniper", "Kepler", "Lodestar", "Mirage", "Nadir", "Onyx",
+  "Paragon", "Quasar", "Riven", "Starling", "Thorne", "Umbra", "Valkyr", "Wyvern",
+]);
+const SPECIALTY_WORDS = Object.freeze({
+  trade: ["Freight Consortium", "Trading House", "Exchange", "Merchant League", "Commerce Guild"],
+  industry: ["Fabrication Works", "Foundry", "Heavy Industries", "Manufacturing Combine", "Assembly Yards"],
+  planetary: ["Colonial Holdings", "Extraction Group", "Planetary Ventures", "Terraform Concern", "Surface Works"],
+  security: ["Defense Corps", "Security Directorate", "Guard Legion", "Patrol Command", "Shield Company"],
+  piracy: ["Raiders", "Corsairs", "Reavers", "Cutthroat Company", "Black Fleet"],
+  sovereignty: ["Frontier Holdings", "Expeditionary Force", "Pioneer Command", "Outer Rim Compact", "Claimholders"],
+});
+const LEGACY_PREFIX = /^\s*evejs\b/i;
+
+function isLegacyName(name) {
+  return LEGACY_PREFIX.test(String(name || ""));
+}
+
+function generateCorporationName(specialtyID = "", options = {}) {
+  const authority = options.authority || require("../corporation/corporationState");
+  const random = options.random || Math.random;
+  const words = SPECIALTY_WORDS[specialtyID] || Object.values(SPECIALTY_WORDS).flat();
+  for (const suffix of shuffled(words, random)) {
+    for (const prefix of shuffled(PREFIXES, random)) {
+      const name = `${prefix} ${suffix}`;
+      if (authority.findCorporationByName(name) || authority.findAllianceByExactName(name)) continue;
+      const ticker = tickerCandidates(name).find((candidate) =>
+        !authority.findCorporationByTickerName(candidate) && !authority.findAllianceByShortName(candidate));
+      if (ticker) return { name, ticker };
+    }
+  }
+  return null;
+}
+
+module.exports = { NAMES, chooseCorporationName, generateCorporationName, isLegacyName, isEnabled, tickerCandidates };

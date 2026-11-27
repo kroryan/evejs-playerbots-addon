@@ -46,11 +46,29 @@ function readRegionNames() {
   }
 }
 
-// Systems as [id, name, x, y, z, security, regionID, constellationID] and
-// stargate links as [fromID, toID] with fromID < toID. Built once.
+// Main-sequence class (O, B, A, F, G, K or M) from the sun's type name, e.g.
+// "Sun G5 (Yellow)" -> "G". Empty when unknown.
+function starClass(system, cache) {
+  const typeID = Math.trunc(num(system.sunTypeID));
+  if (!typeID) return "";
+  if (!cache.has(typeID)) {
+    let letter = "";
+    try {
+      const type = require("../inventory/itemTypeRegistry").resolveItemByTypeID(typeID);
+      const match = /\b([OBAFGKM])\d/i.exec(String(type && (type.name || type.typeName) || ""));
+      letter = match ? match[1].toUpperCase() : "";
+    } catch (_) { letter = ""; }
+    cache.set(typeID, letter);
+  }
+  return cache.get(typeID);
+}
+
+// Systems as [id, name, x, y, z, security, regionID, constellationID, star
+// class] and stargate links as [fromID, toID] with fromID < toID. Built once.
 function buildStaticMap() {
   if (staticMap) return staticMap;
   const systems = [];
+  const starTypes = new Map();
   const links = new Set();
   for (const system of worldData.getSolarSystems()) {
     const id = systemID(system);
@@ -62,6 +80,7 @@ function buildStaticMap() {
       num(position.x), num(position.y), num(position.z),
       Math.round(num(system.security ?? system.securityStatus) * 100) / 100,
       Math.trunc(num(system.regionID)), Math.trunc(num(system.constellationID)),
+      starClass(system, starTypes),
     ]);
     for (const gate of worldData.getStargatesForSystem(id)) {
       const to = gateDestination(gate);
