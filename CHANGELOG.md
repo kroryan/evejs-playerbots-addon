@@ -5,6 +5,16 @@ the Windows launcher package adds a fourth number for its own releases.
 
 ## Unreleased: EveJS 261126.2 and a dashboard that keeps up
 
+- **Bots in bot corporations can be invited again** (issue #29). Bots never
+  give up their roles the way a player does before quitting, so `/bots invite`
+  failed with `CrpCantQuitNotInStasis`. A non-CEO bot in a bot-run corporation
+  now drops its roles and titles when it accepts an invitation; bots in
+  player-run corporations still need their roles removed there, and a bot CEO
+  gets a clear "cannot leave" message.
+- **`/bots corp inviteall` works without a configured target**: it fills the
+  caller's own player corporation. The error for an unset target now names the
+  Docker setting (`EVEJS_PLAYER_BOTS_RECRUITMENT_CORPORATION` in `.env`).
+
 - **Works with EveJS 261126.2** (was 261125.3). Three server files the
   add-on replaces changed upstream (`network/tcp/index.js`,
   `chat/xmppStubServer.js`, `market/marketProxyService.js`) and merged without

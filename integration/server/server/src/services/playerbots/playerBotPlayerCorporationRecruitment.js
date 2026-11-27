@@ -21,7 +21,10 @@ let automaticPaused = false;
 
 function resolveTarget(value) {
   const selector = String(value || "").trim();
-  if (!selector) return { error: "Set Target corporation under Launcher > Mods > Configure, then restart Game." };
+  if (!selector) {
+    return { error: "No target corporation set. In the Launcher use Mods > Configure > Target corporation; " +
+      "on Docker set EVEJS_PLAYER_BOTS_RECRUITMENT_CORPORATION in .env and restart the server." };
+  }
   const prefix = /^(name|ticker):\s*/i.exec(selector);
   const query = prefix ? selector.slice(prefix[0].length).trim() : selector;
   const mode = prefix?.[1].toLowerCase();
@@ -182,8 +185,20 @@ function startRecruits(corporation, session, { notify, action = "", manual = fal
   return `Playerbot recruitment queued for ${activeJob.label}. Checking ${candidates.length} managed pilots. Use /bots corp inviteall status.`;
 }
 
+// Without a configured target, a manual inviteall fills the caller's own player corporation.
+function resolveManualTarget(session) {
+  if (String(process.env.EVEJS_PLAYER_BOTS_RECRUITMENT_CORPORATION || "").trim()) {
+    return resolveTarget(process.env.EVEJS_PLAYER_BOTS_RECRUITMENT_CORPORATION);
+  }
+  const corporationID = Number(session?.corporationID || session?.corpid || 0);
+  const corporation = corporationID && !corporations.isNpcCorporationID(corporationID)
+    ? corporations.getCorporationRecord(corporationID) : null;
+  if (corporation && !corporation.deleted && corporation.isNPC === false) return { corporation };
+  return resolveTarget("");
+}
+
 function inviteAll(session, notify, action = "") {
-  const target = resolveTarget(process.env.EVEJS_PLAYER_BOTS_RECRUITMENT_CORPORATION);
+  const target = resolveManualTarget(session);
   return target.error || startRecruits(target.corporation, session, { notify, action: action === true ? "status" : action, manual: true });
 }
 

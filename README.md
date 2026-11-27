@@ -277,7 +277,7 @@ fleet; staff can command any bot. Every command, with examples:
 | `/playerbots mine <bot>` | Send a bot mining |
 | `/playerbots pause <bot>` / `resume <bot>` | Stop or restart one bot's own decisions |
 | `/bots corp recall` / `corp work` | Recall your corporation home / send it back to work |
-| `/bots corp inviteall` | Invite every eligible bot into the recruitment corporation |
+| `/bots corp inviteall` | Invite every eligible bot into the recruitment corporation (your own corporation when none is set) |
 
 ---
 
@@ -343,7 +343,7 @@ and so on; see [Roster and population](GUIDE.md#roster-and-population)).
 
 | Variable | Default | What it does |
 | --- | --- | --- |
-| `RECRUITMENT_CORPORATION` | empty | Player corporation that `/bots corp inviteall` and automatic recruitment fill (name or ticker) |
+| `RECRUITMENT_CORPORATION` | empty | Player corporation that `/bots corp inviteall` and automatic recruitment fill (name or ticker). On Docker, set `EVEJS_PLAYER_BOTS_RECRUITMENT_CORPORATION` in `.env`; manual inviteall falls back to your own corporation |
 | `AUTO_RECRUIT_CORPORATION` | `0` | `1` recruits eligible bots continuously |
 | `RECRUITMENT_BATCH_SIZE` | 4 | Bots per recruitment batch (1–16) |
 | `PLAYER_CORPORATION_MEMBER_LIMIT` | 15000 | Seats in a human-led corporation; `0` uses EveJS's skill-based limit |
