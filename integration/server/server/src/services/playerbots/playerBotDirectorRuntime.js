@@ -191,6 +191,8 @@ function isEnabled() {
 // set not to assign work meanwhile (the default).
 function isPausedForSeeding() {
   try {
+    // The world seed moves pilots itself; the director waits until it is done.
+    try { if (require("./playerBotWorldSeedRuntime").isRunning()) return true; } catch (_) { /* no world seed */ }
     const settings = require("./playerBotConfigurationRuntime").getSettings();
     if (settings.rosterSeedEnabled !== true || settings.directorWhileSeeding === true) return false;
     const target = Number(settings.rosterTarget) || 0;

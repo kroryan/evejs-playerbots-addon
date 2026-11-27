@@ -1129,7 +1129,9 @@ async function runAutonomyCycle(options = {}) {
   };
   if (!addonChunk) saveAutonomySnapshot(snapshot);
   const log = require("../../utils/logger");
-  log.info(
+  // Add-on steps run per pilot, hundreds a minute; log them only when slow.
+  const level = addonChunk && cycleDurationMs < 250 ? "debug" : "info";
+  log[level](
     `[PlayerBots] ${addonChunk ? "Addon step" : "Autonomy cycle"} bots=${bots.length} durationMs=${cycleDurationMs.toFixed(1)} ` +
       `PI colonies=${piSummary.colonyCount} extractorsRestarted=${piSummary.restartedCount} ` +
       `tasksCreated=${piSummary.tasksQueued} tasksCompleted=${piSummary.tasksCompleted} ` +

@@ -501,6 +501,18 @@ function createDashboardServer(options = {}) {
       const body = await readJsonBody(request);
       return proxyMutation(response, "/v1/dashboard/roster-reset", "POST", body);
     }
+    if (url.pathname === "/api/world-seed") {
+      if (request.method === "GET") return proxyApi(response, "/v1/dashboard/world-seed", url.searchParams.get("plan") === "1" ? "?plan=1" : "");
+      if (request.method !== "POST") {
+        send(response, 405, "text/plain; charset=utf-8", "Method not allowed.", { allow: "GET, POST" });
+        return;
+      }
+      if (!isSameOriginRequest(request)) {
+        send(response, 403, "application/json; charset=utf-8", JSON.stringify({ error: "Cross-origin dashboard updates are blocked." }));
+        return;
+      }
+      return proxyMutation(response, "/v1/dashboard/world-seed", "POST", await readJsonBody(request));
+    }
     if (url.pathname === "/api/seed-status") {
       if (request.method !== "GET") {
         send(response, 405, "text/plain; charset=utf-8", "Method not allowed.", { allow: "GET" });

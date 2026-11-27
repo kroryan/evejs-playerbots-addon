@@ -18,6 +18,7 @@ function pausedFor(settings, botCount) {
   const modules = {
     "./playerBotConfigurationRuntime": { getSettings: () => settings },
     "./playerBotRuntime": { getBotCount: () => botCount },
+    "./playerBotWorldSeedRuntime": { isRunning: () => settings.worldSeedRunning === true },
   };
   const check = vm.runInNewContext(`${fn}\nisPausedForSeeding`, { Number, require: (name) => modules[name] });
   return check();
@@ -29,6 +30,7 @@ test("the director pauses while seeding is below the roster target", () => {
   assert.equal(pausedFor(seeding, 5000), false, "target reached");
   assert.equal(pausedFor({ ...seeding, rosterSeedEnabled: false }, 1200), false, "seeding off");
   assert.equal(pausedFor({ ...seeding, directorWhileSeeding: true }, 1200), false, "operator allows work");
+  assert.equal(pausedFor({ rosterSeedEnabled: false, worldSeedRunning: true }, 5000), true, "world seed running");
 });
 
 test("work while seeding is off by default", () => {

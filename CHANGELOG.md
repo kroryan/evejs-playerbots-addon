@@ -74,6 +74,18 @@ the Windows launcher package adds a fourth number for its own releases.
   is online. `/v1/map/live` lists claims, contested systems and the war for
   each contested pair. `EVEJS_PLAYER_BOTS_TERRITORY_AUTOCLAIM=0` stops bot
   claims; `EVEJS_PLAYER_BOTS_TERRITORY_WARS=0` stops territory wars.
+- **World seed (optional).** Settings → World seed gives every corporation
+  a near-equal start in null-sec without simulating it: its own null-sec
+  region (spread as far apart as possible; corporations that already have a
+  null-sec station keep their region), an Astrahus headquarters, a Raitaru
+  and an Athanor brought online with service modules and fuel, three
+  claimed systems with sovereignty (founding an alliance where a corporation
+  has none), 2B ISK, its bots docked in its structures, and a few market
+  orders and manufacturing jobs. A preview shows the plan first, a typed
+  confirmation starts it, and the director waits while it runs. Repeating it
+  only finishes missing steps.
+- **Quieter logs.** Per-pilot "Addon step" lines, hundreds a minute, are
+  logged only when a step is slow.
 - **Empire intel for the Territory Map.** `GET /v1/map/intel?corp=<id>`
   reports the cargo routes bots are running, where they mine and fight,
   kills in the last 24 hours, open wars and every structure by system, plus

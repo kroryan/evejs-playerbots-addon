@@ -483,6 +483,26 @@ function createPlayerBotAddonApiRuntime(options = {}) {
         return;
       }
     }
+    if (url.pathname === "/v1/dashboard/world-seed") {
+      const worldSeed = require("./playerBotWorldSeedRuntime");
+      if (request.method === "GET") {
+        const plan = url.searchParams.get("plan") === "1" ? worldSeed.buildPlan() : null;
+        sendJson(response, 200, { seed: worldSeed.getStatus(), plan, confirmation: worldSeed.CONFIRMATION });
+        return;
+      }
+      if (request.method === "POST") {
+        const body = await readBody(request);
+        const result = worldSeed.startSeed({
+          confirmation: body && body.confirmation,
+          sovereignty: body && body.sovereignty !== false,
+          moveBots: body && body.moveBots !== false,
+          ordersAndJobs: body && body.ordersAndJobs !== false,
+        });
+        logger.info(`[PlayerBotsAddon] World seed requested: ${result.message}`);
+        sendJson(response, result.success ? 202 : 400, result.success ? { seed: result.status, message: result.message } : { error: result.message });
+        return;
+      }
+    }
     if (request.method === "GET" && url.pathname === "/v1/dashboard/seed-status") {
       sendJson(response, 200, rosterSeedStatus());
       return;
