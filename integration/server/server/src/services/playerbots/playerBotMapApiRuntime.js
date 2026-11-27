@@ -33,6 +33,13 @@ function readRegionNames() {
         if (id && name) names[id] = String(name);
       }
     }
+    // Region names also ride along on solar system and station rows.
+    for (const table of [TABLE.SOLAR_SYSTEMS, TABLE.STATIONS].filter(Boolean)) {
+      for (const row of readStaticRows(table) || []) {
+        const regionID = Math.trunc(num(row.regionID));
+        if (regionID && row.regionName && !names[regionID]) names[regionID] = String(row.regionName);
+      }
+    }
     return names;
   } catch (_) {
     return {};

@@ -755,8 +755,8 @@
     "server/src/services/playerbots/playerBotMapApiRuntime.js": {
       "baseSha256": null,
       "subsystem": "playerbots-core",
-      "sourceSha256": "4002c352853c6593d97513fdc39a46d563dcdbfc11ee56f8a3bd530da52ccc6f",
-      "overlaySha256": "4002c352853c6593d97513fdc39a46d563dcdbfc11ee56f8a3bd530da52ccc6f"
+      "sourceSha256": "ad1d43e48a70bc7ed2738a9fd8093f6851d3e954de17ca61ce800c85b82b1f9b",
+      "overlaySha256": "ad1d43e48a70bc7ed2738a9fd8093f6851d3e954de17ca61ce800c85b82b1f9b"
     },
     "server/src/services/playerbots/playerBotMapIntelRuntime.js": {
       "baseSha256": null,
@@ -1025,8 +1025,8 @@
     "server/src/services/playerbots/playerBotWorldSeedRuntime.js": {
       "baseSha256": null,
       "subsystem": "playerbots-core",
-      "sourceSha256": "41b7bb05cb5809ff376eea22b2799e8e6ac644b59e3607ebf33b7f3493ad7670",
-      "overlaySha256": "41b7bb05cb5809ff376eea22b2799e8e6ac644b59e3607ebf33b7f3493ad7670"
+      "sourceSha256": "e1a6c32cb382f08bca36455de49a2a2caf4c1211c7247ea5fc20a51795a02d3e",
+      "overlaySha256": "e1a6c32cb382f08bca36455de49a2a2caf4c1211c7247ea5fc20a51795a02d3e"
     },
     "server/src/services/scheduler/durableScheduler.js": {
       "baseSha256": "456870d45bbb4223608ca5a74bd4306d97d284c0145b669c4bee6e94051dfeb5",

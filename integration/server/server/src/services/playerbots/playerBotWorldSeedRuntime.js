@@ -168,6 +168,8 @@ function buildPlan(options = {}) {
   const usedRegions = new Set();
   const distance = (a, b) => Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z);
   const homeIn = (region, preferredSystemID = 0) => {
+    // A corporation's own station system stays its home, sovereignty or not.
+    if (preferredSystemID && systems.get(preferredSystemID)?.sec <= 0) return preferredSystemID;
     const score = (id) => {
       const system = systems.get(id);
       if (!system || system.sec > 0 || !claimable(id)) return -1;
@@ -364,7 +366,16 @@ function seedAlliance(entry) {
 
 function seedSovereignty(entry) {
   const sov = require("../sovereignty/sovGmState");
+  const held = new Map();
+  try {
+    for (const row of require("../sovereignty/sovState").listAllSovereigntySystemStates() || []) {
+      held.set(positiveID(row.solarSystemID || row.systemID), [positiveID(row.allianceID), positiveID(row.corporationID)]);
+    }
+  } catch (_) { /* none yet */ }
   for (const systemID of entry.claims) {
+    const owner = held.get(systemID);
+    if (owner && (owner[0] === entry.allianceID || owner[1] === entry.corporationID)) continue; // already ours
+    if (owner && (owner[0] || owner[1])) { note(`${entry.name}: ${systemID} already has sovereignty; left alone`); continue; }
     const result = sov.captureSystemForOwner(systemID, entry.allianceID, entry.corporationID);
     if (!result || result.success === false) note(`${entry.name}: sovereignty in ${systemID} refused (${result && result.errorMsg})`);
   }
