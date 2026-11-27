@@ -55,6 +55,60 @@ the Windows launcher package adds a fourth number for its own releases.
   player buy orders and the set of bot owners are kept for a few seconds
   instead of rereading all 5,000 character records per pilot (16%), and the
   mining escort check reads operations without copying them all (13%).
+- **Map data for the Territory Map add-on.** The private API answers
+  `GET /v1/map/static` (every solar system's position, security and region,
+  and the stargate links) and `GET /v1/map/live` (the pilots in each system
+  and current sovereignty), with the usual add-on token.
+- **Territory claims and territory wars.** Corporations claim null-sec
+  territory around an Upwell station they have anchored in null-sec: that
+  system first, then up to five in all, each a stargate jump from one they
+  hold. Bot corporations claim on their own, one system every 30 minutes,
+  preferring unclaimed systems; a corporation that loses its last station in
+  its territory loses its claims. The Territory Map can also claim and
+  unclaim for any corporation (`POST /v1/map/claim` and `/v1/map/unclaim`,
+  `GET /v1/map/corporations`). Claims are saved with the other Playerbots
+  data. When two corporations claim the same system, a bot corporation among
+  them declares a normal war on the other (war bill, 24-hour timer,
+  Crimewatch; never on a corporation in its own alliance), and its war pilots
+  go after rival pilots in contested systems first, or patrol them when none
+  is online. `/v1/map/live` lists claims, contested systems and the war for
+  each contested pair. `EVEJS_PLAYER_BOTS_TERRITORY_AUTOCLAIM=0` stops bot
+  claims; `EVEJS_PLAYER_BOTS_TERRITORY_WARS=0` stops territory wars.
+- **Structure reads no longer stall the server.** Every structure lookup
+  ran a full structure tick (all timers, fuel and service modules, cloning
+  their inventory). With thousands of pilots docked and shopping in Upwell
+  structures, one director pass made thousands of lookups and froze the
+  server for minutes at a time (80% of CPU in a profile). The tick now runs
+  at most every 2 seconds; reads in between use the current data.
+- **Claims are spent when captured.** A claimed system gets a neutral
+  Sovereignty Hub to capture; sovereignty pilots go for their corporation's
+  claims first. Once the corporation holds the system's sovereignty, the
+  claim no longer counts against its five, so it can claim the next system.
+  New claims may link to held systems as well as claims and stations, and a
+  system claimed by one corporation and held by another is contested.
+- **World seed (optional).** Settings → World seed gives every corporation
+  a near-equal start in null-sec without simulating it: its own null-sec
+  region (spread as far apart as possible; corporations that already have a
+  null-sec station keep their region), an Astrahus headquarters, a Raitaru
+  and an Athanor brought online with service modules and fuel, three
+  claimed systems with sovereignty (founding an alliance where a corporation
+  has none), 2B ISK, its bots docked in its structures, and a few market
+  orders and manufacturing jobs. A preview shows the plan first, a typed
+  confirmation starts it, and the director waits while it runs. Repeating it
+  only finishes missing steps.
+- **Quieter logs.** Per-pilot "Addon step" lines, hundreds a minute, are
+  logged only when a step is slow.
+- **Empire intel for the Territory Map.** `GET /v1/map/intel?corp=<id>`
+  reports the cargo routes bots are running, where they mine and fight,
+  kills in the last 24 hours, open wars and every structure by system, plus
+  one corporation's online pilots, bot work, structures, territory, wars and
+  threats (war targets, recent kills and contested claims in or next to its
+  space), and the main job in each system. `POST /v1/map/command` sends a
+  corporation's bots to mine a system, or to defend it (half gate camp its
+  stargates, half patrol its belts and anomalies): idle pilots start at
+  once, busy ones stop their current job and follow within two minutes.
+  Combat operations accept a patrol system for this, and gate camps a
+  stargate in it.
 - **Pilots in crowded systems no longer stall the director.** About 3,700
   of 5,000 pilots sat in starter systems over the per-system cap, where the
   only work is a relocation trip, and those are limited to 100 at a time. The

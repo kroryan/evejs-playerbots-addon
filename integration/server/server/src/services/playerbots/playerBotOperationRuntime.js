@@ -2989,6 +2989,41 @@ async function advanceUpgrade(operation, bot) {
   return block(operation, "blocked", `Unknown upgrade stage ${operation.stage}.`);
 }
 
+// World seed: the next ship on a role's ladder, with its parts already in the
+// pilot's hangar at stationID, so nothing is bought. Returns the rung, or null.
+function planSeededShipUpgrade(botQuery, role) {
+  const bot = getPlayerBots().resolveBot(botQuery);
+  if (!bot || !SHIP_LADDER[role]) return null;
+  return nextShipUpgrade(bot, role) || null;
+}
+
+// Starts that upgrade at the boarding step: board the hull, fit the modules.
+function startSeededShipUpgrade(botQuery, role, rung, stationID) {
+  const bot = getPlayerBots().resolveBot(botQuery);
+  const refusal = assertCanStart(bot);
+  if (refusal) return { success: false, message: refusal };
+  const operation = baseOperation("upgrade", bot, {
+    stage: "board",
+    role,
+    name: rung.name,
+    hullTypeID: rung.hullTypeID,
+    moduleTypeIDs: [...(rung.moduleTypeIDs || [])],
+    droneTypeIDs: [...(rung.droneTypeIDs || [])],
+    cargoTypeIDs: [...(rung.cargoTypeIDs || [])],
+    replenishOnly: false,
+    marketStationID: normalizePositiveInteger(stationID),
+    maxSpend: 0,
+    spent: 0,
+    pending: null,
+    newShipID: null,
+    autonomous: true,
+    worldSeed: true,
+  });
+  record(operation, `World seed: ${rung.name} and its parts were placed in the hangar at ${operation.marketStationID}; boarding and fitting.`);
+  saveOperation(operation);
+  return { success: true, operation };
+}
+
 function startShipUpgrade(botQuery, role = "mining", options = {}) {
   const bot = getPlayerBots().resolveBot(botQuery);
   const refusal = assertCanStart(bot, {
@@ -5258,7 +5293,26 @@ function startCombat(botQuery, mode = "security", options = {}) {
     ? priorOperation.failedAnomalySites
     : []).filter((entry) => Number(entry && entry.failedAtMs) > Date.now() - 60 * 60 * 1000);
   const defensiveTargetID = normalizePositiveInteger(options.defensiveTargetID);
-  const anomalyTarget = !defensiveTargetID && !miningEscortTarget && normalizedMode === "security"
+  // Territory Map dispatch: patrol a chosen system, based at a station there.
+  const patrolSystemID = !defensiveTargetID && !miningEscortTarget ? normalizePositiveInteger(options.patrolSystemID) : 0;
+  let patrolTarget = null;
+  if (patrolSystemID) {
+    const route = getSpace().previewSystemRoute(bot, patrolSystemID);
+    if (!route || route.success !== true) {
+      return { success: false, message: route && route.message || `No route is available to system ${patrolSystemID}.` };
+    }
+    patrolTarget = { success: true, stationID: normalizePositiveInteger(options.patrolStationID), systemID: patrolSystemID,
+      hops: route.hops, risk: route.risk, mode: "belt" };
+    if (normalizedMode === "gate-camp") {
+      // Camp one of the system's stargates, spread across pilots.
+      const gates = (worldData.getStargatesForSystem(patrolSystemID) || [])
+        .map((gate) => normalizePositiveInteger(gate.itemID || gate.stargateID)).filter(Boolean).sort((a, b) => a - b);
+      if (!gates.length) return { success: false, message: `System ${patrolSystemID} has no stargates to camp.` };
+      patrolTarget = { ...patrolTarget, mode: "gate-camp", patrolEntityID: gates[Number(bot.characterID) % gates.length] };
+    }
+    if (!patrolTarget.stationID) return { success: false, message: "A station in the patrol system is required." };
+  }
+  const anomalyTarget = !defensiveTargetID && !miningEscortTarget && !patrolSystemID && normalizedMode === "security"
     ? combat.findNearestCombatAnomalyBase(bot, fitProfile, 20, {
       // Ratters look for sites around home first.
       originSystemID: homeCombatOrigin(bot),
@@ -5279,6 +5333,7 @@ function startCombat(botQuery, mode = "security", options = {}) {
       ? { success: true, stationID, systemID: currentSystemID, hops: 0, risk: null, mode: "defensive-response" }
       : { success: false, message: "Could not determine a safe station for the defensive response." };
   } else if (miningEscortTarget) target = miningEscortTarget;
+  else if (patrolTarget) target = patrolTarget;
   else if (normalizedMode === "nullsec-conflict") target = conflictTarget;
   else if (normalizedMode === "piracy") target = combat.findNearestPirateBase(bot);
   else if (normalizedMode === "gate-camp") target = require("./playerBotHomeBaseRuntime").gateCampBase(bot);
@@ -6606,6 +6661,8 @@ module.exports = {
   resumeOperation,
   reconcileLegacyPIExportReviews,
   startShipUpgrade,
+  planSeededShipUpgrade,
+  startSeededShipUpgrade,
   startCapsuleRecovery,
   startSavedFitting,
   startHaul,

@@ -191,6 +191,8 @@ function isEnabled() {
 // set not to assign work meanwhile (the default).
 function isPausedForSeeding() {
   try {
+    // The world seed moves pilots itself; the director waits until it is done.
+    try { if (require("./playerBotWorldSeedRuntime").isRunning()) return true; } catch (_) { /* no world seed */ }
     const settings = require("./playerBotConfigurationRuntime").getSettings();
     if (settings.rosterSeedEnabled !== true || settings.directorWhileSeeding === true) return false;
     const target = Number(settings.rosterTarget) || 0;
@@ -1814,6 +1816,25 @@ async function runDirectorInternal(bots = [], options = {}) {
     } catch (error) {
       require("../../utils/logger").warn(
         `[PlayerBots] Bot rivalry war planning was skipped: ${String(error && error.message || error).slice(0, 180)}.`,
+      );
+    }
+    // Territory Map claims: bot corporations claim null-sec around their
+    // Upwell stations, and contested systems lead to a normal corporation war.
+    try {
+      const territory = require("./playerBotTerritoryClaimsRuntime");
+      const claimPass = territory.reconcileClaims(allRosterBots);
+      if (claimPass.claimed) summary.territoryClaimsMade = claimPass.claimed;
+      if (claimPass.dropped) summary.territoryClaimsDropped = claimPass.dropped;
+      const territoryWar = await territory.declareTerritoryWars(allRosterBots, { humanControlledBotIDs });
+      if (territoryWar.declared) {
+        summary.territoryWarsDeclared = 1;
+        require("../../utils/logger").info(
+          `[PlayerBots] Declared corporation war ${territoryWar.warID} from corporation ${territoryWar.declaringCorporationID} against ${territoryWar.opposingCorporationID} over contested territory (${territoryWar.systems.join(", ")}); the normal 24-hour war start timer applies.`,
+        );
+      }
+    } catch (error) {
+      require("../../utils/logger").warn(
+        `[PlayerBots] Territory war planning was skipped: ${String(error && error.message || error).slice(0, 180)}.`,
       );
     }
     // Corporations attacked again and again declare war on the aggressor.

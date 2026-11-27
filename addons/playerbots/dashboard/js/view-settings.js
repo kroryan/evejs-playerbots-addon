@@ -122,6 +122,14 @@ function pageHtml(effectiveAutowork, roster) {
   <div class="panel"><div class="panel-head"><div><h2>${icon("hash")}Corporation and alliance names</h2><p>Applies to organizations created from now on. Empty lists keep the original naming.</p></div></div>
     <div class="panel-body"><textarea id="names-text" class="name-library-editor" rows="12" spellcheck="false" aria-label="Name library (JSON)"></textarea>
     <div class="save-bar"><span class="muted" id="names-status">Loading…</span><span class="actions"><button type="button" class="btn ghost" id="names-template">${icon("list")}<span>Load template</span></button><button type="button" class="btn primary" id="names-save">${icon("check")}<span>Save name library</span></button></span></div></div></div>
+  <div class="panel"><div class="panel-head"><div><h2>${icon("world")}World seed</h2><p>Optional. Skips the slow start: every corporation gets its own null-sec region, an Astrahus headquarters, a Raitaru and an Athanor (online, fuelled, with service modules), 3 claimed systems, 2B ISK, and its bots docked in its structures. Written straight into the game data; nothing is flown or bought. Running it again only finishes what is missing.</p></div></div>
+    <div class="panel-body"><div class="toolbar"><button type="button" class="btn ghost" id="world-plan">${icon("list")}<span>Preview the plan</span></button>
+      <label class="check"><input type="checkbox" id="world-sov" checked> Sovereignty in claimed systems (founds an alliance for corporations without one)</label>
+      <label class="check"><input type="checkbox" id="world-move" checked> Move bots into their structures now and give each its next role ship</label>
+      <label class="check"><input type="checkbox" id="world-market" checked> Market orders and manufacturing jobs</label></div>
+    <div id="world-plan-view"></div>
+    <div class="toolbar" style="margin-top:10px"><label class="stack">Type SEED NEW EDEN to confirm<input class="field" id="world-confirm" autocomplete="off" spellcheck="false"></label><button type="button" class="btn primary" id="world-start">${icon("check")}<span>Seed New Eden</span></button></div>
+    <p class="muted" id="world-status" style="margin:10px 0 0">Loading…</p></div></div>
   <div class="panel danger-zone"><div class="panel-head"><div><h2>${icon("trash")}Delete all bots</h2><p>Cancels every playerbot's market orders, stops its work and deletes the character. Assets go to its corporation. Human characters are untouched. This cannot be undone.</p></div></div>
     <div class="panel-body"><div class="toolbar"><label class="stack">Type DELETE ALL BOTS to confirm<input class="field" id="reset-confirm" autocomplete="off" spellcheck="false"></label><label class="check"><input type="checkbox" id="reset-reseed" checked> Seed a new roster afterwards</label><button type="button" class="btn danger" id="reset-start">${icon("trash")}<span>Delete all bots</span></button></div>
     <p class="muted" id="reset-status" style="margin:10px 0 0">Loading…</p></div></div>`;
@@ -199,6 +207,39 @@ async function loadReset() {
   }
 }
 
+function describeWorldSeed(seed) {
+  if (!seed || seed.status === "idle") return "The world seed has not run.";
+  const errors = seed.errors && seed.errors.length ? ` ${seed.errors.length} note(s); latest: ${seed.errors[seed.errors.length - 1]}` : "";
+  if (seed.status === "running") return `Seeding: ${seed.step || "starting"}${seed.toMove ? ` · bots moved ${num(seed.moved)} of ${num(seed.toMove)}` : ""}.${errors}`;
+  if (seed.status === "interrupted") return `The last seed was interrupted by a restart. Run it again to finish.${errors}`;
+  return `World seed ${seed.status} ${seed.finishedAt ? new Date(seed.finishedAt).toLocaleString() : ""}: ${num(seed.corporations.length)} corporations, ${num(seed.moved)} bots moved.${errors}`;
+}
+
+async function loadWorldSeed() {
+  try {
+    const data = await getJSON("/api/world-seed");
+    if (!$("world-status")) return;
+    $("world-status").textContent = describeWorldSeed(data.seed);
+    $("world-start").disabled = data.seed && data.seed.status === "running";
+    if (data.seed && data.seed.status === "running") setTimeout(() => void loadWorldSeed(), 5_000);
+  } catch (error) {
+    if ($("world-status")) $("world-status").textContent = `World seed status unavailable: ${error.message}`;
+  }
+}
+
+async function previewWorldSeed() {
+  $("world-plan-view").innerHTML = `<p class="muted">Planning…</p>`;
+  try {
+    const { plan } = await getJSON("/api/world-seed?plan=1");
+    $("world-plan-view").innerHTML = `
+      ${plan.missingTypes.length ? `<p class="bad">Missing from the static data: ${esc(plan.missingTypes.join(", "))}. The seed will refuse to run.</p>` : ""}
+      <div class="table-wrap"><table class="table"><thead><tr><th>Corporation</th><th>Region</th><th>Home</th><th>Claims</th><th>Bots</th><th>Notes</th></tr></thead><tbody>
+      ${plan.corporations.map((c) => `<tr><td>${esc(c.name)}</td><td>${esc(c.regionName || "")}</td><td>${esc(c.homeSystemName || "")}</td><td>${esc((c.claimNames || []).join(", "))}</td><td>${num(c.bots)}</td>
+        <td>${esc([c.error, c.existingRegion ? "keeps its current region" : "", c.needsAlliance ? "new alliance for sovereignty" : ""].filter(Boolean).join("; "))}</td></tr>`).join("")}
+      </tbody></table></div>`;
+  } catch (error) { $("world-plan-view").innerHTML = `<p class="bad">${error.message}</p>`; }
+}
+
 async function loadNames() {
   try {
     const data = await getJSON("/api/name-library");
@@ -257,8 +298,21 @@ async function load(fresh) {
       await loadReset();
     } catch (error) { toast(error.message, "bad"); }
   });
+  $("world-plan").addEventListener("click", () => void previewWorldSeed());
+  $("world-start").addEventListener("click", async () => {
+    const confirmation = $("world-confirm").value.trim();
+    if (confirmation !== "SEED NEW EDEN") return toast("Type SEED NEW EDEN exactly to confirm.", "bad");
+    if (!(await confirmDialog("Seed New Eden", "Create structures, claims, sovereignty and ISK for every corporation and move their bots now?", "Seed New Eden"))) return;
+    try {
+      const data = await postJSON("/api/world-seed", { confirmation, sovereignty: $("world-sov").checked, moveBots: $("world-move").checked, ordersAndJobs: $("world-market").checked });
+      $("world-confirm").value = "";
+      toast(data.message || "World seed started.", "good");
+      await loadWorldSeed();
+    } catch (error) { toast(error.message, "bad"); }
+  });
   void loadNames();
   void loadReset();
+  void loadWorldSeed();
 }
 
 export async function render(ctx) {

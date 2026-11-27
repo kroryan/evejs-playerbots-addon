@@ -228,6 +228,39 @@ function createPlayerBotAddonApiRuntime(options = {}) {
         return;
       }
     }
+    // Territory Map add-on: static starmap and live bots and sovereignty.
+    if (request.method === "GET" && url.pathname === "/v1/map/static") {
+      sendJson(response, 200, require("./playerBotMapApiRuntime").buildStaticMap());
+      return;
+    }
+    if (request.method === "GET" && url.pathname === "/v1/map/live") {
+      sendJson(response, 200, require("./playerBotMapApiRuntime").buildLiveMap());
+      return;
+    }
+    if (request.method === "GET" && url.pathname === "/v1/map/intel") {
+      sendJson(response, 200, require("./playerBotMapIntelRuntime").buildIntel(url.searchParams.get("corp")));
+      return;
+    }
+    if (request.method === "POST" && url.pathname === "/v1/map/command") {
+      const body = await readBody(request);
+      const result = require("./playerBotMapIntelRuntime").commandBots(body.corporationID, body.systemID, body.action, body.count);
+      logger.info(`[PlayerBotsAddon] Map order ${String(body.action).slice(0, 10)} corp=${Number(body.corporationID) || 0} system=${Number(body.systemID) || 0}: ${String(result.message || "").slice(0, 160)}`);
+      sendJson(response, result.success ? 200 : Number(result.statusCode) || 400, result);
+      return;
+    }
+    if (request.method === "GET" && url.pathname === "/v1/map/corporations") {
+      sendJson(response, 200, require("./playerBotMapApiRuntime").listMapCorporations(url.searchParams.get("q") || ""));
+      return;
+    }
+    if (request.method === "POST" && (url.pathname === "/v1/map/claim" || url.pathname === "/v1/map/unclaim")) {
+      const body = await readBody(request);
+      const territory = require("./playerBotTerritoryClaimsRuntime");
+      const result = url.pathname === "/v1/map/claim"
+        ? territory.claim(body.corporationID, body.systemID)
+        : territory.unclaim(body.corporationID, body.systemID);
+      sendJson(response, result.success ? 200 : Number(result.statusCode) || 400, result);
+      return;
+    }
     if (request.method === "GET" && url.pathname === "/v1/roster") {
       const bots = playerBots.listBots();
       sendJson(response, 200, {
@@ -447,6 +480,28 @@ function createPlayerBotAddonApiRuntime(options = {}) {
         sendJson(response, result.success ? 202 : 400, result.success
           ? { reset: result.state, message: result.message }
           : { error: result.message });
+        return;
+      }
+    }
+    if (url.pathname === "/v1/dashboard/world-seed") {
+      const worldSeed = require("./playerBotWorldSeedRuntime");
+      if (request.method === "GET") {
+        const only = String(url.searchParams.get("only") || "").split(",").map(Number).filter(Boolean);
+        const plan = url.searchParams.get("plan") === "1" ? worldSeed.buildPlan({ onlyCorporationIDs: only }) : null;
+        sendJson(response, 200, { seed: worldSeed.getStatus(), plan, confirmation: worldSeed.CONFIRMATION });
+        return;
+      }
+      if (request.method === "POST") {
+        const body = await readBody(request);
+        const result = worldSeed.startSeed({
+          confirmation: body && body.confirmation,
+          sovereignty: body && body.sovereignty !== false,
+          moveBots: body && body.moveBots !== false,
+          ordersAndJobs: body && body.ordersAndJobs !== false,
+          onlyCorporationIDs: Array.isArray(body && body.onlyCorporationIDs) ? body.onlyCorporationIDs.slice(0, 50) : [],
+        });
+        logger.info(`[PlayerBotsAddon] World seed requested: ${result.message}`);
+        sendJson(response, result.success ? 202 : 400, result.success ? { seed: result.status, message: result.message } : { error: result.message });
         return;
       }
     }

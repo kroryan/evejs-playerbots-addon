@@ -506,6 +506,9 @@ async function bootWorld(options = {}) {
     "wallet-authority",
     () => productionWalletAuthorityRuntime.shutdown(),
   );
+  // Structure reads tick every structure; with pilots living in structures
+  // that has to be rate-limited (see the module).
+  try { require("./src/services/playerbots/playerBotStructureReadThrottle").install(); } catch (_) { /* stock behaviour */ }
   const playerBotSpaceRuntime = require("./src/services/playerbots/playerBotSpaceRuntime");
   const unregisterPlayerBotSpaceShutdown = database.registerShutdownHook(
     "playerbot-space-actors",

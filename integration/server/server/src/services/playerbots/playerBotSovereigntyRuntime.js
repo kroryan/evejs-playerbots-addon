@@ -27,7 +27,7 @@ function selectObjectives(objectives = [], allianceID, activeNodeIDs = []) {
       Number(left.hops) - Number(right.hops) || Number(left.nodeID) - Number(right.nodeID));
 }
 
-function selectNeutralHubObjectives(objectives = [], activeTargetIDs = []) {
+function selectNeutralHubObjectives(objectives = [], activeTargetIDs = [], preferredSystemIDs = new Set()) {
   const activeCounts = new Map();
   for (const targetID of Array.isArray(activeTargetIDs) ? activeTargetIDs : []) {
     const numericID = Number(targetID) || 0;
@@ -42,7 +42,9 @@ function selectNeutralHubObjectives(objectives = [], activeTargetIDs = []) {
         const rate = Number(objective.capture && objective.capture.scoringRate);
         return Number.isFinite(rate) && rate !== 0;
       };
-      return Number(isContested(right)) - Number(isContested(left)) ||
+      // Systems the pilot's corporation has claimed on the Territory Map first.
+      return Number(preferredSystemIDs.has(Number(right.systemID))) - Number(preferredSystemIDs.has(Number(left.systemID))) ||
+        Number(isContested(right)) - Number(isContested(left)) ||
         Number(left.hops) - Number(right.hops) || Number(left.targetID) - Number(right.targetID);
     });
 }
@@ -178,7 +180,12 @@ function getNeutralHubObjectives(bot, options = {}) {
         hops: route && route.success ? route.gates.length : Number.MAX_SAFE_INTEGER,
         routeRisk: route && route.success ? route.risk || null : null };
     });
-  return selectNeutralHubObjectives(reachable, activeTargets);
+  let claimed = new Set();
+  try {
+    const corporationID = normalizeID(character.corporationID || bot.corporationID);
+    claimed = new Set((require("./playerBotTerritoryClaimsRuntime").getClaims()[corporationID] || []).map(Number));
+  } catch (_) { claimed = new Set(); }
+  return selectNeutralHubObjectives(reachable, activeTargets, claimed);
 }
 
 function findSovereigntyObjective(bot) {
