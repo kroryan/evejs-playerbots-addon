@@ -74,6 +74,12 @@ the Windows launcher package adds a fourth number for its own releases.
   is online. `/v1/map/live` lists claims, contested systems and the war for
   each contested pair. `EVEJS_PLAYER_BOTS_TERRITORY_AUTOCLAIM=0` stops bot
   claims; `EVEJS_PLAYER_BOTS_TERRITORY_WARS=0` stops territory wars.
+- **Structure reads no longer stall the server.** Every structure lookup
+  ran a full structure tick (all timers, fuel and service modules, cloning
+  their inventory). With thousands of pilots docked and shopping in Upwell
+  structures, one director pass made thousands of lookups and froze the
+  server for minutes at a time (80% of CPU in a profile). The tick now runs
+  at most every 2 seconds; reads in between use the current data.
 - **Claims are spent when captured.** A claimed system gets a neutral
   Sovereignty Hub to capture; sovereignty pilots go for their corporation's
   claims first. Once the corporation holds the system's sovereignty, the
