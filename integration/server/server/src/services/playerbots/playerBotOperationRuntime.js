@@ -5258,7 +5258,19 @@ function startCombat(botQuery, mode = "security", options = {}) {
     ? priorOperation.failedAnomalySites
     : []).filter((entry) => Number(entry && entry.failedAtMs) > Date.now() - 60 * 60 * 1000);
   const defensiveTargetID = normalizePositiveInteger(options.defensiveTargetID);
-  const anomalyTarget = !defensiveTargetID && !miningEscortTarget && normalizedMode === "security"
+  // Territory Map dispatch: patrol a chosen system, based at a station there.
+  const patrolSystemID = !defensiveTargetID && !miningEscortTarget ? normalizePositiveInteger(options.patrolSystemID) : 0;
+  let patrolTarget = null;
+  if (patrolSystemID) {
+    const route = getSpace().previewSystemRoute(bot, patrolSystemID);
+    if (!route || route.success !== true) {
+      return { success: false, message: route && route.message || `No route is available to system ${patrolSystemID}.` };
+    }
+    patrolTarget = { success: true, stationID: normalizePositiveInteger(options.patrolStationID), systemID: patrolSystemID,
+      hops: route.hops, risk: route.risk, mode: "belt" };
+    if (!patrolTarget.stationID) return { success: false, message: "A station in the patrol system is required." };
+  }
+  const anomalyTarget = !defensiveTargetID && !miningEscortTarget && !patrolSystemID && normalizedMode === "security"
     ? combat.findNearestCombatAnomalyBase(bot, fitProfile, 20, {
       // Ratters look for sites around home first.
       originSystemID: homeCombatOrigin(bot),
@@ -5279,6 +5291,7 @@ function startCombat(botQuery, mode = "security", options = {}) {
       ? { success: true, stationID, systemID: currentSystemID, hops: 0, risk: null, mode: "defensive-response" }
       : { success: false, message: "Could not determine a safe station for the defensive response." };
   } else if (miningEscortTarget) target = miningEscortTarget;
+  else if (patrolTarget) target = patrolTarget;
   else if (normalizedMode === "nullsec-conflict") target = conflictTarget;
   else if (normalizedMode === "piracy") target = combat.findNearestPirateBase(bot);
   else if (normalizedMode === "gate-camp") target = require("./playerBotHomeBaseRuntime").gateCampBase(bot);

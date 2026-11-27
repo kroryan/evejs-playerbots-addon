@@ -237,6 +237,17 @@ function createPlayerBotAddonApiRuntime(options = {}) {
       sendJson(response, 200, require("./playerBotMapApiRuntime").buildLiveMap());
       return;
     }
+    if (request.method === "GET" && url.pathname === "/v1/map/intel") {
+      sendJson(response, 200, require("./playerBotMapIntelRuntime").buildIntel(url.searchParams.get("corp")));
+      return;
+    }
+    if (request.method === "POST" && url.pathname === "/v1/map/command") {
+      const body = await readBody(request);
+      const result = require("./playerBotMapIntelRuntime").commandBots(body.corporationID, body.systemID, body.action, body.count);
+      logger.info(`[PlayerBotsAddon] Map order ${String(body.action).slice(0, 10)} corp=${Number(body.corporationID) || 0} system=${Number(body.systemID) || 0}: ${String(result.message || "").slice(0, 160)}`);
+      sendJson(response, result.success ? 200 : Number(result.statusCode) || 400, result);
+      return;
+    }
     if (request.method === "GET" && url.pathname === "/v1/map/corporations") {
       sendJson(response, 200, require("./playerBotMapApiRuntime").listMapCorporations(url.searchParams.get("q") || ""));
       return;

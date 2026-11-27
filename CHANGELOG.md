@@ -74,6 +74,15 @@ the Windows launcher package adds a fourth number for its own releases.
   is online. `/v1/map/live` lists claims, contested systems and the war for
   each contested pair. `EVEJS_PLAYER_BOTS_TERRITORY_AUTOCLAIM=0` stops bot
   claims; `EVEJS_PLAYER_BOTS_TERRITORY_WARS=0` stops territory wars.
+- **Empire intel for the Territory Map.** `GET /v1/map/intel?corp=<id>`
+  reports the cargo routes bots are running, where they mine and fight,
+  kills in the last 24 hours, open wars and every structure by system, plus
+  one corporation's online pilots, bot work, structures, territory, wars and
+  threats (war targets, recent kills and contested claims in or next to its
+  space). `POST /v1/map/command` sends a corporation's bots to mine or
+  defend a system: idle pilots start at once, busy ones stop their current
+  job and follow within two minutes. Combat operations accept a patrol
+  system for this.
 - **Pilots in crowded systems no longer stall the director.** About 3,700
   of 5,000 pilots sat in starter systems over the per-system cap, where the
   only work is a relocation trip, and those are limited to 100 at a time. The
