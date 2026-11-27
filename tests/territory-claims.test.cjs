@@ -14,6 +14,8 @@ const links = [[1, 2], [2, 3], [3, 4], [4, 5], [5, 6], [6, 7], [1, 8]];
 const security = { 1: -0.2, 2: -0.1, 3: 0, 4: -0.5, 5: -0.4, 6: -0.3, 7: 0.3, 8: 0.9 };
 let stored = null;
 let structures = [];
+let sovereignty = [];
+const hubsAnchored = [];
 const stubs = {
   "../../gameStore/tableRepository": { createTableRepository: () => ({
     read: () => ({ success: Boolean(stored), data: stored }),
@@ -29,6 +31,8 @@ const stubs = {
     getStructureTypeByID: (typeID) => ({ 35832: { dockable: true }, 35841: { dockable: false } })[typeID] || null,
   },
   "../corporation/warRuntimeState": { listAllWars: () => [] },
+  "../sovereignty/sovState": { listAllSovereigntySystemStates: () => sovereignty, getSystemState: () => null },
+  "../sovereignty/sovGmState": { anchorSovereigntyHub: (systemID) => { hubsAnchored.push(systemID); return { success: true }; } },
 };
 const originalRequire = Module.prototype.require;
 Module.prototype.require = function require(id) {
@@ -43,18 +47,21 @@ const station = (ownerCorpID, solarSystemID, extra = {}) =>
 
 function reset() {
   stored = null;
+  sovereignty = [];
+  hubsAnchored.length = 0;
   structures = [station(10, 1), station(20, 3)];
   territory._testing.reset();
 }
 
-test("claims need null-sec and start at an anchored Upwell station", () => {
+test("claims need null-sec and link back to an anchored Upwell station", () => {
   reset();
   structures.push(station(10, 8)); // high-sec station: not an anchor
   assert.match(territory.claim(10, 8).message, /null-sec/);
-  assert.match(territory.claim(10, 2).message, /anchored Upwell station/);
+  assert.match(territory.claim(10, 3).message, /station system or a stargate jump/);
   assert.equal(territory.claim(10, 1).success, true);
-  assert.equal(territory.claim(10, 3).success, false, "not adjacent to 1");
   assert.equal(territory.claim(10, 2).success, true);
+  assert.equal(territory.claim(10, 4).success, false, "not linked yet");
+  assert.equal(territory.claim(10, 3).success, true);
   assert.equal(territory.claim(99, 1).success, false, "unknown corporation");
 });
 
@@ -87,8 +94,9 @@ test("unclaiming drops claims cut off from the anchor claim", () => {
   for (const id of [1, 2, 3, 4]) territory.claim(10, id);
   assert.deepEqual(territory.unclaim(10, 2).systems, [1]);
   for (const id of [2, 3]) territory.claim(10, id);
-  assert.deepEqual(territory.unclaim(10, 1).systems, []);
-  assert.deepEqual(territory.getClaims(), {});
+  assert.deepEqual(territory.unclaim(10, 1).systems, [2, 3], "the station system still anchors them");
+  structures = structures.filter((entry) => entry.ownerCorpID !== 10);
+  assert.deepEqual(territory.unclaim(10, 2).systems, [], "nothing anchors 3 any more");
 });
 
 test("bot-run corporations claim around their station, one system per interval", () => {
@@ -113,8 +121,28 @@ test("losing the anchor station moves or drops the claims", () => {
   for (const id of [1, 2, 3]) territory.claim(10, id);
   structures = structures.filter((entry) => entry.solarSystemID !== 1);
   territory.reconcileClaims([], {});
-  assert.deepEqual(territory.getClaims()[10], [2, 1, 3], "re-anchored at the station in 2");
+  assert.deepEqual(territory.getClaims()[10], [1, 2, 3], "still linked through the station in 2");
   structures = structures.filter((entry) => entry.ownerCorpID !== 10);
   assert.equal(territory.reconcileClaims([], {}).dropped, 3);
   assert.equal(territory.getClaims()[10], undefined);
+});
+
+test("claimed systems get a capture target, and a captured claim frees its slot", () => {
+  reset();
+  for (const id of [1, 2, 3, 4, 5]) territory.claim(10, id);
+  assert.deepEqual(hubsAnchored, [1, 2, 3, 4, 5]);
+  assert.match(territory.claim(10, 6).message, /capture one/);
+  sovereignty = [{ solarSystemID: 1, corporationID: 10, allianceID: 99 }, { solarSystemID: 2, corporationID: 10, allianceID: 99 }];
+  const pass = territory.reconcileClaims([], {});
+  assert.equal(pass.captured, 2);
+  assert.deepEqual(territory.getClaims()[10], [3, 4, 5]);
+  assert.equal(territory.claim(10, 6).success, true, "a slot is free again");
+  assert.match(territory.claim(10, 1).message, /already holds/);
+});
+
+test("a system held by one corporation and claimed by another is contested", () => {
+  reset();
+  sovereignty = [{ solarSystemID: 4, corporationID: 20, allianceID: 98 }];
+  for (const id of [1, 2, 3, 4]) territory.claim(10, id);
+  assert.deepEqual(territory.getContested(), { 4: [10, 20] });
 });

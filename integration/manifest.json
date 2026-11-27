@@ -761,8 +761,8 @@
     "server/src/services/playerbots/playerBotMapIntelRuntime.js": {
       "baseSha256": null,
       "subsystem": "playerbots-core",
-      "sourceSha256": "bbc3e6c3ba36740427afc242de412e4161426f02b964a633222f7535f03e3c11",
-      "overlaySha256": "bbc3e6c3ba36740427afc242de412e4161426f02b964a633222f7535f03e3c11"
+      "sourceSha256": "f2ab3524fc18f3b67d3fb49181df3997ae723c9cd251e08a29d7a964380efc51",
+      "overlaySha256": "f2ab3524fc18f3b67d3fb49181df3997ae723c9cd251e08a29d7a964380efc51"
     },
     "server/src/services/playerbots/playerBotMarketMakerRuntime.js": {
       "baseSha256": null,
@@ -904,8 +904,8 @@
     },
     "server/src/services/playerbots/playerBotSovereigntyRuntime.js": {
       "baseSha256": null,
-      "sourceSha256": "5e49780eafd52d7b4d520c45c8f49931d6bb59441c026ad6f4222cd5260d07d3",
-      "overlaySha256": "5e49780eafd52d7b4d520c45c8f49931d6bb59441c026ad6f4222cd5260d07d3",
+      "sourceSha256": "b0a827716341ae5ffab6f2c1af9bcc0b98794eb892258448e4cc061f1a191130",
+      "overlaySha256": "b0a827716341ae5ffab6f2c1af9bcc0b98794eb892258448e4cc061f1a191130",
       "subsystem": "playerbots-core"
     },
     "server/src/services/playerbots/playerBotSpaceRuntime.js": {
@@ -959,8 +959,8 @@
     "server/src/services/playerbots/playerBotTerritoryClaimsRuntime.js": {
       "baseSha256": null,
       "subsystem": "playerbots-core",
-      "sourceSha256": "ded2b4b6b9484f4e369551fc530d206c95586c088d41dcac0654596277a99418",
-      "overlaySha256": "ded2b4b6b9484f4e369551fc530d206c95586c088d41dcac0654596277a99418"
+      "sourceSha256": "31e1becb05c32b681ddf740d69e8a03719fe58ab9501d37647ac44dcf949b6d9",
+      "overlaySha256": "31e1becb05c32b681ddf740d69e8a03719fe58ab9501d37647ac44dcf949b6d9"
     },
     "server/src/services/playerbots/playerBotTerritoryRuntime.js": {
       "baseSha256": null,
@@ -1025,8 +1025,8 @@
     "server/src/services/playerbots/playerBotWorldSeedRuntime.js": {
       "baseSha256": null,
       "subsystem": "playerbots-core",
-      "sourceSha256": "567be9785b13c25f472bce85c7884a68c974cfcd056a68be8862d6ccb80cc8ba",
-      "overlaySha256": "567be9785b13c25f472bce85c7884a68c974cfcd056a68be8862d6ccb80cc8ba"
+      "sourceSha256": "86d72de3c5d6b07282b86767f7c7c84ff31e688733613e2c48dfa54ae040025f",
+      "overlaySha256": "86d72de3c5d6b07282b86767f7c7c84ff31e688733613e2c48dfa54ae040025f"
     },
     "server/src/services/scheduler/durableScheduler.js": {
       "baseSha256": "456870d45bbb4223608ca5a74bd4306d97d284c0145b669c4bee6e94051dfeb5",

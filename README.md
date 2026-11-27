@@ -426,9 +426,12 @@ and so on; see [Roster and population](GUIDE.md#roster-and-population)).
 ## Territory, intel and the world seed
 
 - **Territory claims.** Corporations claim null-sec around an Upwell
-  station they have anchored there: up to five systems, each a stargate jump
-  from one they hold. Bot corporations claim on their own; two corporations
-  claiming one system go to war over it.
+  station they have anchored there: up to five open claims, each a stargate
+  jump from their station or a system they claim or hold. Each claimed
+  system gets a neutral Sovereignty Hub; sovereignty pilots prefer their
+  corporation's claims, and a captured system frees the claim for the next.
+  Bot corporations claim on their own; corporations claiming one system, or
+  claiming a system another holds, go to war over it.
 - **Map API.** The private API serves the starmap, live bots and
   sovereignty, claims, an intel report (trade routes, mining, combat, kills,
   wars, structures and one corporation's threats) and orders that send a

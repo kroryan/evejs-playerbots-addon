@@ -398,8 +398,9 @@ function seedSovereignty(entry) {
 function seedClaims(entry) {
   const territory = require("./playerBotTerritoryClaimsRuntime");
   const held = territory.getClaims()[entry.corporationID] || [];
+  const owned = new Set(territory.ownedSystems(entry.corporationID));
   for (const systemID of entry.claims) {
-    if (held.includes(systemID)) continue;
+    if (held.includes(systemID) || owned.has(systemID)) continue; // held by sovereignty already counts as taken
     const result = territory.claim(entry.corporationID, systemID);
     if (!result.success) note(`${entry.name}: claim ${systemID} refused (${result.message})`);
   }

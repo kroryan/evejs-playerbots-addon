@@ -74,6 +74,12 @@ the Windows launcher package adds a fourth number for its own releases.
   is online. `/v1/map/live` lists claims, contested systems and the war for
   each contested pair. `EVEJS_PLAYER_BOTS_TERRITORY_AUTOCLAIM=0` stops bot
   claims; `EVEJS_PLAYER_BOTS_TERRITORY_WARS=0` stops territory wars.
+- **Claims are spent when captured.** A claimed system gets a neutral
+  Sovereignty Hub to capture; sovereignty pilots go for their corporation's
+  claims first. Once the corporation holds the system's sovereignty, the
+  claim no longer counts against its five, so it can claim the next system.
+  New claims may link to held systems as well as claims and stations, and a
+  system claimed by one corporation and held by another is contested.
 - **World seed (optional).** Settings → World seed gives every corporation
   a near-equal start in null-sec without simulating it: its own null-sec
   region (spread as far apart as possible; corporations that already have a

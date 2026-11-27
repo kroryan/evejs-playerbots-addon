@@ -255,6 +255,7 @@ function buildCorporation(global, corporationID, players) {
   const territory = require("./playerBotTerritoryClaimsRuntime");
   const claims = territory.getClaims()[corporationID] || [];
   const anchors = territory.anchorSystems(corporationID);
+  const owned = territory.ownedSystems(corporationID);
 
   // Pilots: bots in the corporation, and online players.
   const { readSharedCharacterRecord } = require("../character/characterState");
@@ -291,7 +292,7 @@ function buildCorporation(global, corporationID, players) {
 
   // Threats: war targets and recent kills in or next to its space.
   if (!adjacencyCache) adjacencyCache = neighbourMap();
-  const home = new Set([...claims, ...anchors, ...structures.map((s) => s[2]), ...members.map((m) => m[3])].filter(Boolean));
+  const home = new Set([...claims, ...anchors, ...owned, ...structures.map((s) => s[2]), ...members.map((m) => m[3])].filter(Boolean));
   const watched = new Map();
   for (const systemID of home) {
     watched.set(systemID, "home");
@@ -353,6 +354,7 @@ function buildCorporation(global, corporationID, players) {
     structures,
     claims,
     anchors,
+    owned,
     wars: wars.map((war) => war[0]),
     threats: threats.slice(0, 40),
     pendingDispatch: [...pendingDispatch.values()].filter((entry) => entry.corporationID === corporationID).length,

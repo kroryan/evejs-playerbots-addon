@@ -2,14 +2,19 @@
 
 // Territory claims for the Territory Map add-on. Claims are null-sec only. A
 // corporation first anchors an Upwell station (a dockable structure) in
-// null-sec; that system becomes its anchor claim, and it may then claim up to
-// MAX_CLAIMS systems in all, each linked by stargate to one it already holds.
-// Bot-run corporations claim on their own, one system at a time; the operator
-// can claim and unclaim for any corporation from the map. Systems claimed by
-// more than one corporation are contested; a bot-run claimant declares a
-// normal EveJS corporation war on its rival (bill, 24-hour start timer and
-// Crimewatch rules all apply), and its war pilots patrol contested systems.
-// Losing the last Upwell station in its claims drops a corporation's claims.
+// null-sec; that system is where its territory starts. A claim stakes a
+// system the corporation means to take: it may hold up to MAX_CLAIMS at a
+// time, each a stargate jump from its station system, its other claims or
+// the systems it already holds by sovereignty. Each claimed system without
+// sovereignty gets a neutral Sovereignty Hub, which the corporation's
+// sovereignty pilots capture by Entosis. Once a claimed system is captured
+// (the corporation holds its sovereignty), the claim is spent and the
+// corporation may claim another. Bot-run corporations claim on their own;
+// the operator can claim and unclaim for any corporation from the map.
+// A system claimed by more than one corporation, or claimed by one and held
+// by another, is contested; a bot-run party declares a normal EveJS
+// corporation war on its rival, and its war pilots patrol contested systems.
+// Losing its stations and its sovereignty drops a corporation's claims.
 
 const STORE_PATH = "/_territoryClaims";
 const MAX_CLAIMS = 5;
@@ -114,18 +119,49 @@ function anchorSystems(corporationID) {
   return anchorsByCorporation().get(corporationID) || new Set();
 }
 
-// Keep only claims connected to the first one.
-function connectedFromFirst(systems) {
-  if (!systems.length) return [];
-  const remaining = new Set(systems);
-  const reached = new Set([systems[0]]);
-  const queue = [systems[0]];
+// Which corporation holds sovereignty in each system.
+function sovereigntyOwners() {
+  const owners = new Map();
+  try {
+    for (const row of require("../sovereignty/sovState").listAllSovereigntySystemStates() || []) {
+      const systemID = positiveID(row && (row.solarSystemID || row.systemID));
+      const corporationID = positiveID(row && row.corporationID);
+      if (systemID && corporationID) owners.set(systemID, corporationID);
+    }
+  } catch (_) { /* no sovereignty yet */ }
+  return owners;
+}
+
+function ownedSystems(corporationID, owners = sovereigntyOwners()) {
+  const owned = new Set();
+  for (const [systemID, owner] of owners) if (owner === corporationID) owned.add(systemID);
+  return owned;
+}
+
+// Claims stay valid while they link back, through the corporation's claims
+// and held systems, to a station system or a held system.
+function connectedClaims(claims, anchors, owned) {
+  const nodes = new Set([...claims, ...owned, ...anchors]);
+  const reached = new Set([...owned, ...[...anchors].filter((id) => nodes.has(id))]);
+  const queue = [...reached];
   while (queue.length) {
     for (const next of neighbours(queue.shift())) {
-      if (remaining.has(next) && !reached.has(next)) { reached.add(next); queue.push(next); }
+      if (nodes.has(next) && !reached.has(next)) { reached.add(next); queue.push(next); }
     }
   }
-  return systems.filter((id) => reached.has(id));
+  return claims.filter((id) => reached.has(id));
+}
+
+// A claimed system without sovereignty gets a neutral Sovereignty Hub to
+// capture, unless it already has one.
+function ensureCaptureTarget(systemID) {
+  try {
+    const state = require("../sovereignty/sovState").getSystemState(systemID);
+    if (state && (positiveID(state.allianceID) || positiveID(state.corporationID) ||
+      (Array.isArray(state.structures) && state.structures.some((s) => s && Number(s.typeID) === 32458)))) return false;
+    const result = require("../sovereignty/sovGmState").anchorSovereigntyHub(systemID, null, null, { neutral: true });
+    return Boolean(result && result.success);
+  } catch (_) { return false; }
 }
 
 function claim(corporationIDValue, systemIDValue) {
@@ -139,32 +175,34 @@ function claim(corporationIDValue, systemIDValue) {
   }
   const state = load();
   const held = state.claims[corporationID] || [];
+  const owned = ownedSystems(corporationID);
+  const anchors = anchorSystems(corporationID);
+  if (owned.has(systemID)) return { success: false, statusCode: 409, message: "The corporation already holds this system by sovereignty." };
   if (held.includes(systemID)) return { success: false, statusCode: 409, message: "The corporation already claims this system." };
-  if (held.length >= MAX_CLAIMS) return { success: false, statusCode: 409, message: `A corporation can claim at most ${MAX_CLAIMS} systems.` };
-  if (!held.length) {
-    const anchors = anchorSystems(corporationID);
-    if (!anchors.has(systemID)) {
-      return { success: false, statusCode: 409, message: anchors.size
-        ? "The first claim must be a null-sec system where the corporation has an anchored Upwell station."
-        : "The corporation needs an anchored Upwell station in null-sec before it can claim territory." };
-    }
+  if (held.length >= MAX_CLAIMS) {
+    return { success: false, statusCode: 409, message: `A corporation can have at most ${MAX_CLAIMS} open claims; capture one by sovereignty to free a slot.` };
   }
-  if (held.length && !held.some((id) => neighbours(id).has(systemID))) {
-    return { success: false, statusCode: 409, message: "The system must be linked by stargate to one the corporation already claims." };
+  if (!anchors.size && !owned.size) {
+    return { success: false, statusCode: 409, message: "The corporation needs an anchored Upwell station in null-sec before it can claim territory." };
+  }
+  const linked = anchors.has(systemID) || [...held, ...owned, ...anchors].some((id) => neighbours(id).has(systemID));
+  if (!linked) {
+    return { success: false, statusCode: 409, message: "The system must be its station system or a stargate jump from a system it claims or holds." };
   }
   save({ claims: { ...state.claims, [corporationID]: [...held, systemID] } });
+  ensureCaptureTarget(systemID);
   return { success: true, corporationID, systems: [...held, systemID] };
 }
 
-// Removing a claim also drops claims that are no longer connected to the
-// anchor claim; removing the anchor claim drops them all.
+// Removing a claim also drops claims no longer linked to a station system or
+// a held system.
 function unclaim(corporationIDValue, systemIDValue) {
   const corporationID = positiveID(corporationIDValue);
   const systemID = positiveID(systemIDValue);
   const state = load();
   const held = state.claims[corporationID] || [];
   if (!held.includes(systemID)) return { success: false, statusCode: 404, message: "The corporation does not claim this system." };
-  const kept = held[0] === systemID ? [] : connectedFromFirst(held.filter((id) => id !== systemID));
+  const kept = connectedClaims(held.filter((id) => id !== systemID), anchorSystems(corporationID), ownedSystems(corporationID));
   const claims = { ...state.claims };
   if (kept.length) claims[corporationID] = kept; else delete claims[corporationID];
   save({ claims });
@@ -175,7 +213,9 @@ function getClaims() {
   return load().claims;
 }
 
-function getContested() {
+// Systems claimed by more than one corporation, or claimed by one and held
+// by another. The holder is listed with the claimants.
+function getContested(owners = sovereigntyOwners()) {
   const bySystem = new Map();
   for (const [corporationID, systems] of Object.entries(load().claims)) {
     for (const systemID of systems) {
@@ -184,7 +224,11 @@ function getContested() {
     }
   }
   const contested = {};
-  for (const [systemID, corporations] of bySystem) if (corporations.length > 1) contested[systemID] = corporations;
+  for (const [systemID, corporations] of bySystem) {
+    const owner = owners.get(systemID);
+    const parties = owner && !corporations.includes(owner) ? [...corporations, owner] : corporations;
+    if (parties.length > 1) contested[systemID] = parties;
+  }
   return contested;
 }
 
@@ -237,22 +281,30 @@ function getTerritoryWars() {
   return out;
 }
 
-// Director global maintenance. Claims whose anchor station is gone move to
-// another claimed system with a station, or are dropped. Bot-run corporations
-// with a station claim their anchor system, then one neighbouring null-sec
-// system per interval up to MAX_CLAIMS, preferring systems nobody claims.
+// Director global maintenance. Captured claims (the corporation now holds
+// the system's sovereignty) are spent, freeing a slot. Claims no longer linked
+// to a station or held system are dropped. Bot-run corporations with a
+// station or held space claim one more system per interval, preferring
+// systems nobody claims or holds. Claimed systems get a capture target.
 function reconcileClaims(bots = [], options = {}) {
   const nowMs = typeof options.now === "function" ? options.now() : Date.now();
   const anchors = anchorsByCorporation();
+  const owners = sovereigntyOwners();
+  const ownedBy = new Map();
+  for (const [systemID, owner] of owners) {
+    if (!ownedBy.has(owner)) ownedBy.set(owner, new Set());
+    ownedBy.get(owner).add(systemID);
+  }
   const state = load();
   const claims = {};
-  const summary = { dropped: 0, claimed: 0 };
-  for (const [corporationID, systems] of Object.entries(state.claims)) {
-    const held = anchors.get(Number(corporationID)) || new Set();
-    const nullsec = systems.filter((id) => isNullsec(id));
-    const anchorIndex = nullsec.findIndex((id) => held.has(id));
-    const kept = anchorIndex < 0 ? [] : connectedFromFirst([nullsec[anchorIndex], ...nullsec.filter((_, i) => i !== anchorIndex)]);
-    summary.dropped += systems.length - kept.length;
+  const summary = { dropped: 0, claimed: 0, captured: 0 };
+  for (const [key, systems] of Object.entries(state.claims)) {
+    const corporationID = Number(key);
+    const owned = ownedBy.get(corporationID) || new Set();
+    const open = systems.filter((id) => !owned.has(id));
+    summary.captured += systems.length - open.length;
+    const kept = connectedClaims(open.filter((id) => isNullsec(id)), anchors.get(corporationID) || new Set(), owned);
+    summary.dropped += open.length - kept.length;
     if (kept.length) claims[corporationID] = kept;
   }
   const autoclaim = String(process.env.EVEJS_PLAYER_BOTS_TERRITORY_AUTOCLAIM ?? "1").trim() !== "0";
@@ -260,26 +312,25 @@ function reconcileClaims(bots = [], options = {}) {
     const rosterIDs = new Set((Array.isArray(bots) ? bots : []).map((bot) => Number(bot.characterID)));
     const corporationState = require("../corporation/corporationState");
     const claimants = new Map();
-    for (const [corporationID, systems] of Object.entries(claims)) {
-      for (const id of systems) claimants.set(id, (claimants.get(id) || 0) + 1);
+    for (const systems of Object.values(claims)) for (const id of systems) claimants.set(id, (claimants.get(id) || 0) + 1);
+    const bases = new Map();
+    for (const [corporationID, stations] of anchors) bases.set(corporationID, new Set(stations));
+    for (const [corporationID, owned] of ownedBy) {
+      if (!bases.has(corporationID)) bases.set(corporationID, new Set());
     }
-    for (const [corporationID, stations] of [...anchors].sort((a, b) => a[0] - b[0])) {
+    for (const [corporationID, stations] of [...bases].sort((a, b) => a[0] - b[0])) {
       const record = corporationState.getCorporationRecord(corporationID) || {};
       if (record.isNPC === true || !rosterIDs.has(Number(record.ceoID))) continue; // bot-run only
       const held = claims[corporationID] || [];
+      const owned = ownedBy.get(corporationID) || new Set();
       if (held.length >= MAX_CLAIMS) continue;
-      if (held.length && nowMs - (lastExpansionAtMs.get(corporationID) || 0) < EXPANSION_INTERVAL_MS) continue;
-      let next = 0;
-      if (!held.length) {
-        next = Math.min(...stations);
-      } else {
-        const candidates = new Set();
-        for (const id of held) for (const neighbour of neighbours(id)) {
-          if (!held.includes(neighbour) && isNullsec(neighbour)) candidates.add(neighbour);
-        }
-        next = [...candidates].sort((a, b) => Number(stations.has(b)) - Number(stations.has(a)) ||
-          (claimants.get(a) || 0) - (claimants.get(b) || 0) || a - b)[0] || 0;
+      if ((held.length || owned.size) && nowMs - (lastExpansionAtMs.get(corporationID) || 0) < EXPANSION_INTERVAL_MS) continue;
+      const candidates = new Set([...stations].filter((id) => !owned.has(id) && !held.includes(id)));
+      for (const id of [...held, ...owned, ...stations]) for (const next of neighbours(id)) {
+        if (!held.includes(next) && !owned.has(next) && isNullsec(next)) candidates.add(next);
       }
+      const rank = (id) => (stations.has(id) ? 0 : 1) * 100 + (owners.has(id) ? 20 : 0) + (claimants.get(id) || 0);
+      const next = [...candidates].sort((a, b) => rank(a) - rank(b) || a - b)[0] || 0;
       if (!next) continue;
       claims[corporationID] = [...held, next];
       claimants.set(next, (claimants.get(next) || 0) + 1);
@@ -288,6 +339,15 @@ function reconcileClaims(bots = [], options = {}) {
     }
   }
   if (JSON.stringify(claims) !== JSON.stringify(state.claims)) save({ claims });
+  // A few capture targets per pass for claimed systems that need one.
+  let placed = 0;
+  for (const systems of Object.values(claims)) {
+    for (const systemID of systems) {
+      if (placed >= 5) break;
+      if (!owners.has(systemID) && ensureCaptureTarget(systemID)) placed += 1;
+    }
+  }
+  summary.captureTargets = placed;
   return summary;
 }
 
@@ -349,5 +409,6 @@ module.exports = {
   declareTerritoryWars,
   reconcileClaims,
   anchorSystems: (id) => [...anchorSystems(positiveID(id))],
+  ownedSystems: (id) => [...ownedSystems(positiveID(id))],
   _testing: { reset: () => { cache = null; adjacency = null; lastWarAttempt.clear(); lastExpansionAtMs.clear(); } },
 };
