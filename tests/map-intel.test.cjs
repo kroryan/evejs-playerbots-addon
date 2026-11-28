@@ -17,6 +17,8 @@ const stubs = {
     getAsteroidBeltsForSystem: (id) => (id === 1 ? [{}] : []),
   },
   "../structure/structureState": { peekStructures: () => [], getStructureTypeByID: () => null },
+  "./playerBotSpaceRuntime": { findStargateRoute: (a, b) => (a === 1 && b === 4
+    ? { success: true, systemIDs: [1, 2, 3, 4] } : { success: false }) },
   "./playerBotRuntime": { listBots: () => [
     { characterID: 1, characterName: "Idle Miner", specialty: "mining" },
     { characterID: 2, characterName: "Busy Trader", specialty: "trade" },
@@ -44,6 +46,11 @@ test("trade routes run between the systems of an operation's stations", () => {
   assert.deepEqual(ends, [1, 2]);
   assert.equal(intel._testing.routeEnds({ kind: "mine" }, new Map()), null);
   assert.equal(intel._testing.routeEnds({ kind: "haul", fromStationID: 60001, toStationID: 60001 }, new Map()), null);
+});
+
+test("routes carry the stargate path bots fly, not a straight line", () => {
+  assert.deepEqual(intel._testing.routePath(1, 4), [1, 2, 3, 4]);
+  assert.deepEqual(intel._testing.routePath(1, 9), [1, 9], "no route found: just the two ends");
 });
 
 test("dispatch checks the order and the system", () => {

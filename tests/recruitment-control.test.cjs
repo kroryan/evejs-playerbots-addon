@@ -56,7 +56,7 @@ function fixture(profileCount = 5, memberLimit, botLimit = 1000) {
     clearTimeout: timer => timers.delete(timer), clearInterval: timer => timers.delete(timer),
   });
   return {
-    recruitment: module.exports, officer: { characterID: 1 }, joined, timers, load, counts: () => countCalls,
+    recruitment: module.exports, config, officer: { characterID: 1 }, joined, timers, load, counts: () => countCalls,
     batch() {
       const timer = [...timers].find(item => item.delay < 120_000);
       assert.ok(timer);
@@ -115,3 +115,12 @@ test("15,000 total seats include the CEO and avoid repeated bot counting when th
   assert.match(f.recruitment.inviteAll(f.officer, null, "status"), /14999 joined.*11 not processed.*member limit reached/);
 });
 
+
+test("inviteall without a configured target fills the caller's own player corporation", () => {
+  const f = fixture(2);
+  delete f.config.EVEJS_PLAYER_BOTS_RECRUITMENT_CORPORATION;
+  assert.match(f.recruitment.inviteAll({ characterID: 1, corporationID: 41 }), /queued for Test Corp/);
+  f.batch();
+  assert.deepEqual(f.joined, [2, 3]);
+  assert.match(f.recruitment.inviteAll({ characterID: 7, corporationID: 42 }), /EVEJS_PLAYER_BOTS_RECRUITMENT_CORPORATION in \.env/);
+});

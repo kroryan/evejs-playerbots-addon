@@ -143,7 +143,7 @@ function buildGlobal() {
   const routeList = [...routes.values()].sort((a, b) => b.count - a.count).slice(0, 400).map((entry) => {
     const [topCorp] = [...entry.corporations].sort((a, b) => b[1] - a[1])[0] || [0];
     const [topKind] = Object.entries(entry.kinds).sort((a, b) => b[1] - a[1])[0] || ["haul"];
-    return [entry.from, entry.to, entry.count, topKind, n.corp(topCorp)];
+    return [entry.from, entry.to, entry.count, topKind, n.corp(topCorp), routePath(entry.from, entry.to)];
   });
 
   // Kills in the last 24 hours (newest first; stop at the cutoff).
@@ -282,7 +282,7 @@ function buildCorporation(global, corporationID, players) {
     activity[kind] = (activity[kind] || 0) + 1;
     if (ends) {
       const key = `${ends[0]}:${ends[1]}`;
-      myRoutes.set(key, [ends[0], ends[1], (myRoutes.get(key)?.[2] || 0) + 1, kind]);
+      myRoutes.set(key, [ends[0], ends[1], (myRoutes.get(key)?.[2] || 0) + 1, kind, routePath(ends[0], ends[1])]);
     } else if (kind === "mine" && systemID) myMining[systemID] = (myMining[systemID] || 0) + 1;
   }
   const members = players.filter((player) => player[2] === corporationID);
@@ -367,6 +367,18 @@ function buildCorporation(global, corporationID, players) {
     threats: threats.slice(0, 40),
     pendingDispatch: [...pendingDispatch.values()].filter((entry) => entry.corporationID === corporationID).length,
   };
+}
+
+// The systems a bot flies through between two systems: the same stargate
+// route its navigation plans (cached by the pathfinder), so the map can draw
+// the real path rather than a straight line.
+function routePath(fromSystemID, toSystemID) {
+  try {
+    const route = require("./playerBotSpaceRuntime").findStargateRoute(fromSystemID, toSystemID);
+    return route && route.success && Array.isArray(route.systemIDs) ? route.systemIDs.map(Number) : [fromSystemID, toSystemID];
+  } catch (_) {
+    return [fromSystemID, toSystemID];
+  }
 }
 
 function buildIntel(corporationIDValue) {
@@ -500,4 +512,4 @@ function commandBots(corporationIDValue, systemIDValue, actionValue, countValue)
   };
 }
 
-module.exports = { buildIntel, commandBots, _testing: { routeEnds, baseInSystem, reset: () => { globalCache = null; adjacencyCache = null; pendingDispatch.clear(); } } };
+module.exports = { buildIntel, commandBots, _testing: { routeEnds, routePath, baseInSystem, reset: () => { globalCache = null; adjacencyCache = null; pendingDispatch.clear(); } } };

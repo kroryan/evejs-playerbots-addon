@@ -213,6 +213,33 @@ function getClaims() {
   return load().claims;
 }
 
+// Systems within maxHops stargate jumps of a corporation's territory (its
+// claims, sovereignty and anchored-station systems). Null when it has none.
+const reachCache = new Map(); // "corp:hops" -> { at, systems }
+function systemsNearTerritory(corporationID, maxHops) {
+  const id = Number(corporationID) || 0;
+  const key = `${id}:${maxHops}`;
+  const cached = reachCache.get(key);
+  if (cached && Date.now() - cached.at < 60_000) return cached.systems;
+  const seeds = new Set([...(getClaims()[id] || []).map(Number), ...ownedSystems(id), ...anchorSystems(id)]);
+  let systems = null;
+  if (seeds.size) {
+    systems = new Set(seeds);
+    let frontier = [...seeds];
+    for (let hop = 0; hop < maxHops && frontier.length; hop += 1) {
+      const next = [];
+      for (const systemID of frontier) {
+        for (const other of neighbours(systemID)) {
+          if (!systems.has(other)) { systems.add(other); next.push(other); }
+        }
+      }
+      frontier = next;
+    }
+  }
+  reachCache.set(key, { at: Date.now(), systems });
+  return systems;
+}
+
 // Systems claimed by more than one corporation, or claimed by one and held
 // by another. The holder is listed with the claimants.
 function getContested(owners = sovereigntyOwners()) {
@@ -400,6 +427,7 @@ async function declareTerritoryWars(bots = [], options = {}) {
 
 module.exports = {
   MAX_CLAIMS,
+  systemsNearTerritory,
   claim,
   unclaim,
   getClaims,
@@ -410,5 +438,5 @@ module.exports = {
   reconcileClaims,
   anchorSystems: (id) => [...anchorSystems(positiveID(id))],
   ownedSystems: (id) => [...ownedSystems(positiveID(id))],
-  _testing: { reset: () => { cache = null; adjacency = null; lastWarAttempt.clear(); lastExpansionAtMs.clear(); } },
+  _testing: { reset: () => { cache = null; adjacency = null; reachCache.clear(); lastWarAttempt.clear(); lastExpansionAtMs.clear(); } },
 };

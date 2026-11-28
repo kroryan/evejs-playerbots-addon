@@ -602,7 +602,7 @@ command; trade hauler upgrades and gate camps use `upgrade ... trade` and
 | `/bots corp status [corpID]` | Who is home, held, travelling or working |
 | `/bots corp hq [corpID] [list \| set <id> \| clear]` | Show or change headquarters (CEO/staff) |
 | `/bots corp deposit [corpID] [status\|on\|off\|auto\|deliveries\|hangar <1-7>]` | Where mined and PI goods go (CEO/staff) (e.g. `/bots corp deposit hangar 2`) |
-| `/bots corp inviteall [status\|cancel]` | Recruit eligible bots into the target corporation (e.g. `/bots corp inviteall`) |
+| `/bots corp inviteall [status\|cancel]` | Recruit eligible bots into the target corporation, or your own corporation when no target is set (e.g. `/bots corp inviteall`) |
 | `/bots corp help` | Corporation help in game |
 
 **Fleets and fittings**

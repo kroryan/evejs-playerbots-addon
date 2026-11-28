@@ -5,6 +5,51 @@ the Windows launcher package adds a fourth number for its own releases.
 
 ## Unreleased: EveJS 261126.2 and a dashboard that keeps up
 
+- **Trade routes carry their stargate path.** The map intel's routes include
+  the systems bots fly through (the same route their navigation plans), so
+  the Territory Map draws the real path instead of a straight line.
+
+- **Sovereignty bots stay near home.** They flew 20-25 jumps to the first
+  neutral hub they could find. They now only take hubs within 10 jumps of
+  their corporation's territory (claims, held systems and anchored stations;
+  EVEJS_PLAYER_BOTS_SOV_MAX_HUB_JUMPS to change it), and operations already
+  heading further away turn back.
+
+- **Startup no longer dies on a locked database.** A large world flushes
+  several big tables at startup from more than one process, and SQLite's 5 s
+  lock wait ran out ("FLUSH_ERROR: database is locked"). The wait is now 30 s
+  (EVEJS_GAMESTORE_BUSY_TIMEOUT_MS to change it).
+  Startup also waits up to 30 s (was 10 s) for the scheduler process to
+  answer while thousands of jobs are queued at once
+  (EVEJS_SCHEDULER_REQUEST_TIMEOUT_MS).
+- **The per-second structure tick runs at most every 2 seconds.**
+
+- **Lighter space tick with many pilots in structures.** Each active system
+  rebuilt every Upwell structure's scene entity every second, and counting
+  docked pilots scanned every character for each structure. The tick's
+  structure sync now runs at most every 4 seconds per system (syncs after a
+  state change still run at once), and docked counts come from one scan a
+  second. A profile of a seeded world had these at about 40% of server CPU.
+- **Sovereignty bots get their full time on the hub.** The 45-minute
+  participation limit counted from when the operation was queued, so a long
+  trip or a busy scheduler used it up before the bot arrived and no hub was
+  ever captured. It now counts from arrival; the whole operation still ends
+  after 4 hours.
+- **Bot corporations no longer get "EVEJS <specialty>" names.** Once the
+  sci-fi names run out, new corporations get generated names that fit their
+  specialty, and existing bot-run "EVEJS" corporations (and their seeded
+  alliances) are renamed once at startup.
+- **Star class in the map data**, for the Territory Map's Stars view.
+- **Bots in bot corporations can be invited again** (issue #29). Bots never
+  give up their roles the way a player does before quitting, so `/bots invite`
+  failed with `CrpCantQuitNotInStasis`. A non-CEO bot in a bot-run corporation
+  now drops its roles and titles when it accepts an invitation; bots in
+  player-run corporations still need their roles removed there, and a bot CEO
+  gets a clear "cannot leave" message.
+- **`/bots corp inviteall` works without a configured target**: it fills the
+  caller's own player corporation. The error for an unset target now names the
+  Docker setting (`EVEJS_PLAYER_BOTS_RECRUITMENT_CORPORATION` in `.env`).
+
 - **Works with EveJS 261126.2** (was 261125.3). Three server files the
   add-on replaces changed upstream (`network/tcp/index.js`,
   `chat/xmppStubServer.js`, `market/marketProxyService.js`) and merged without

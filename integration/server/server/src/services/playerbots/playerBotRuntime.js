@@ -37,12 +37,12 @@ const MAX_BOTS_PER_PLAYER_CORPORATION = Number.isInteger(configuredCorpLimit) &&
 const DEFAULT_ROSTER_SEED_BATCH_SIZE = 5;
 const MAX_ROSTER_SEED_BATCH_SIZE = 25;
 const SPECIALTIES = Object.freeze([
-  { id: "trade", name: "Trade", corpName: "EVEJS Independent Traders" },
-  { id: "industry", name: "Industry", corpName: "EVEJS Industrial Union" },
-  { id: "planetary", name: "Planetary", corpName: "EVEJS Planetary Combine" },
-  { id: "security", name: "Security", corpName: "EVEJS Security Fleet" },
-  { id: "piracy", name: "Piracy", corpName: "EVEJS Freebooters" },
-  { id: "sovereignty", name: "Sovereignty", corpName: "EVEJS Frontier Compact" },
+  { id: "trade", name: "Trade", corpName: "Independent Traders" },
+  { id: "industry", name: "Industry", corpName: "Industrial Union" },
+  { id: "planetary", name: "Planetary", corpName: "Planetary Combine" },
+  { id: "security", name: "Security", corpName: "Security Fleet" },
+  { id: "piracy", name: "Piracy", corpName: "Freebooters" },
+  { id: "sovereignty", name: "Sovereignty", corpName: "Frontier Compact" },
 ]);
 const CORP_INVITED_BY_CORPORATION = 8;
 const CORP_ACCEPTED_BY_CHARACTER = 2;
@@ -532,7 +532,8 @@ function createBotInTeam(specialty, corporationID, founder = false, shardIndex =
     !findCorporationByFoundingOperationID(foundingOperationIDForShard(specialty.id, shardIndex));
   const selectedName = newCorporation
     ? require("./playerBotNameLibraryRuntime").getRuntime().chooseName(origin?.raceID || 1, "corporations") ||
-      require("./playerBotSciFiCorporationNames").chooseCorporationName()
+      require("./playerBotSciFiCorporationNames").chooseCorporationName() ||
+      require("./playerBotSciFiCorporationNames").generateCorporationName(specialty.id)
     : null;
   const characterResult = require("../character/charService").createPlayerBotCharacter(
     characterName,
@@ -943,6 +944,76 @@ function inviteBotToPlayerCorporation(session, botQuery) {
   return acceptBotCorporationInvitation(getCorpService(), session, bot, targetCorporationID, true);
 }
 
+// Bot corporations founded before name generation existed were called
+// "EVEJS <specialty> <n>" (and their seeded alliances "... Dominion"). Give
+// each bot-run one a generated name and ticker; player corporations are left
+// alone. Idempotent: nothing matches once renamed.
+function renameLegacyBotCorporations() {
+  const names = require("./playerBotSciFiCorporationNames");
+  const runtimeState = require("../corporation/corporationRuntimeState");
+  const corporationState = require("../corporation/corporationState");
+  const { readSharedCharacterRecord } = require("../character/characterState");
+  const ids = new Set();
+  for (const profile of listBotProfiles()) {
+    const character = readSharedCharacterRecord(Number(profile.characterID)) || {};
+    const id = Number(character.corporationID || profile.corporationID) || 0;
+    if (id && !corporationState.isNpcCorporationID(id)) ids.add(id);
+  }
+  const renamed = [];
+  for (const corporationID of ids) {
+    const record = getCorporationRecord(corporationID);
+    if (!record || record.deleted || !names.isLegacyName(record.corporationName)) continue;
+    if (!repo.read(TABLE, `/${Number(record.ceoID)}`).success) continue; // player-run
+    const specialty = SPECIALTIES.find((entry) => String(record.corporationName).toLowerCase().includes(entry.corpName.toLowerCase()));
+    const chosen = names.generateCorporationName(specialty ? specialty.id : "");
+    if (!chosen) continue;
+    const result = runtimeState.updateCorporationRecord(corporationID, { corporationName: chosen.name, tickerName: chosen.ticker });
+    if (!result.success) continue;
+    renamed.push([record.corporationName, chosen.name]);
+    const allianceID = Number(record.allianceID) || 0;
+    const alliance = allianceID ? corporationState.getAllianceRecord(allianceID) : null;
+    if (alliance && names.isLegacyName(alliance.allianceName) &&
+        Number(alliance.executorCorpID || alliance.executorCorporationID || corporationID) === corporationID) {
+      const allianceName = `${chosen.name} Dominion`;
+      const shortName = names.tickerCandidates(allianceName).find((candidate) =>
+        !corporationState.findAllianceByShortName(candidate) && !corporationState.findCorporationByTickerName(candidate));
+      if (!corporationState.findAllianceByExactName(allianceName)) {
+        runtimeState.updateAllianceRecord(allianceID, { allianceName, ...(shortName ? { shortName } : {}) });
+      }
+    }
+  }
+  if (renamed.length) {
+    require("../../utils/logger").info(`[PlayerBots] Renamed ${renamed.length} legacy bot corporations: ${renamed.map(([from, to]) => `${from} -> ${to}`).join(", ")}`);
+  }
+  return renamed;
+}
+
+// Bots never relinquish roles on their own (a player would before quitting), so a
+// non-CEO bot in a bot-run corporation drops its roles and titles when it accepts
+// an invitation elsewhere. Corporations run by players keep their role control.
+function releaseBotCorporationRoles(corporationID, characterID) {
+  const runtimeState = require("../corporation/corporationRuntimeState");
+  const corporation = getCorporationRecord(corporationID);
+  const ceoID = Number(corporation?.ceoID || 0);
+  if (!ceoID || ceoID === characterID || !repo.read(TABLE, `/${ceoID}`).success) return false;
+  const member = runtimeState.getCorporationMember(corporationID, characterID);
+  if (!member) return false;
+  const fields = ["roles", "grantableRoles", "rolesAtHQ", "grantableRolesAtHQ", "rolesAtBase",
+    "grantableRolesAtBase", "rolesAtOther", "grantableRolesAtOther"];
+  const held = fields.some((field) => String(member[field] ?? "0") !== "0") || Number(member.titleMask || 0) !== 0;
+  if (!held) return false;
+  runtimeState.updateCorporationRuntime(corporationID, (runtime) => {
+    const row = runtime.members?.[String(characterID)];
+    if (row) {
+      for (const field of fields) row[field] = "0";
+      row.titleMask = 0;
+    }
+    return runtime;
+  });
+  runtimeState.syncMemberStateToCharacterRecord(corporationID, characterID);
+  return true;
+}
+
 function acceptBotCorporationInvitation(service, session, bot, targetCorporationID, resetTask = false) {
   const { isNpcCorporationID } = require("../corporation/corporationState");
   const { getCorporationRuntime } = require("../corporation/corporationRuntimeState");
@@ -966,8 +1037,17 @@ function acceptBotCorporationInvitation(service, session, bot, targetCorporation
     }
     const botSession = createBotSession(bot);
     if (!isNpcCorporationID(character.corporationID)) {
+      releaseBotCorporationRoles(Number(character.corporationID), characterID);
       const [canLeave, reason] = service.Handle_CanLeaveCurrentCorporation([], botSession);
-      if (!canLeave) return { success: false, ineligible: true, message: reason || "The bot cannot leave its corporation." };
+      if (!canLeave) {
+        const source = getCorporationRecord(Number(character.corporationID));
+        const message = reason === "CrpCEOCanNotQuit"
+          ? `${bot.characterName} is the CEO of ${source?.corporationName || "its corporation"} and cannot leave it.`
+          : reason === "CrpCantQuitNotInStasis"
+            ? `${bot.characterName} still holds roles in ${source?.corporationName || "its corporation"}, which is not bot-run, so the roles must be removed there first.`
+            : reason || "The bot cannot leave its corporation.";
+        return { success: false, ineligible: true, message };
+      }
     }
 
     const runtime = getCorporationRuntime(targetCorporationID) || {};
@@ -1081,6 +1161,8 @@ function invitePlayerToBotFleet(session, botQuery) {
 }
 
 module.exports = {
+  renameLegacyBotCorporations,
+  releaseBotCorporationRoles,
   removeBotRecord,
   DEFAULT_TARGET,
   getConfiguredTarget,

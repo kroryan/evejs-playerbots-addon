@@ -67,7 +67,9 @@ function roster(t) {
     "./playerBotProvisioningRuntime": { reconcileManagedCorporationMemberLimits() {} },
     "./playerBotCorporationEmblemRuntime": require(path.join(root, "playerBotCorporationEmblemRuntime")),
     "./playerBotSciFiCorporationNames": { chooseCorporationName: () =>
-      require(path.join(root, "playerBotSciFiCorporationNames")).chooseCorporationName({ authority }) },
+      require(path.join(root, "playerBotSciFiCorporationNames")).chooseCorporationName({ authority }),
+    generateCorporationName: (specialtyID) =>
+      require(path.join(root, "playerBotSciFiCorporationNames")).generateCorporationName(specialtyID, { authority }) },
   });
   return { api, context, names, authority, bots, characters, corporations };
 }
@@ -125,7 +127,8 @@ test("the sci-fi names and random emblems can each be turned off", (t) => {
   h.names.saveText(JSON.stringify(namesModule.emptyLibrary()));
   const result = h.api.seedRoster(30, 6); assert.equal(result.created, 6, result.error);
   for (const corp of h.corporations.values()) {
-    assert.ok(corp.corporationName.startsWith("EVEJS "), corp.corporationName);
+    // Generated in-universe names, never the old "EVEJS <specialty>" ones.
+    assert.ok(corp.corporationName && !/^evejs\b/i.test(corp.corporationName), corp.corporationName);
     assert.equal(corp.shape1, undefined);
   }
 });

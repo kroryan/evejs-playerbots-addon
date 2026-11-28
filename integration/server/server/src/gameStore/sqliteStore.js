@@ -948,7 +948,10 @@ function init(targetPath, options = {}) {
     if (sharedSchema && db.pragma("user_version", { simple: true }) !== SCHEMA_VERSION) {
       throw new Error("Unsupported shared game database schema version");
     }
-    db.pragma("busy_timeout = 5000");
+    // Playerbots add-on: a large world flushes several big tables at startup
+    // from more than one process; 5 s was not always enough and the server
+    // stopped with FLUSH_ERROR "database is locked". Wait up to 30 s by default.
+    db.pragma(`busy_timeout = ${Math.max(5000, Math.trunc(Number(process.env.EVEJS_GAMESTORE_BUSY_TIMEOUT_MS) || 30000))}`);
     if (readOnly) {
       db.pragma("query_only = ON");
       return db;
