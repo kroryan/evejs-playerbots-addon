@@ -1176,7 +1176,7 @@
   "addonFiles": {
     "addons/playerbots/LICENSE": "ce3fb82d9ee80a1cb0e548f9b0560ead52378ee2b4e826fd9459b4acf7075d89",
     "addons/playerbots/THIRD_PARTY_NOTICES.md": "4e53a2b31f3965241b9d182b7764420e4f121213267ebc3936682544204c34dc",
-    "addons/playerbots/compose.override.yaml": "baee7a87181660a7f954923c9da05fb5be283efafccf3f7478099571ac5fb1aa",
+    "addons/playerbots/compose.override.yaml": "c059820f6e5085d5250964c5363b34fc6a6f5b612de65e7d256055623ab05ee1",
     "addons/playerbots/dashboard/favicon.svg": "87ae4cb756791688a6df31e27db6d30b01930f6f87748f79a25f5d65c8986252",
     "addons/playerbots/dashboard/index.html": "ae63d23ce6ebb564d4c98942bb6e9c917041daf46a934a442a90fe7d2637b11e",
     "addons/playerbots/dashboard/js/api.js": "fb43df2a86b62d62c98e9e876d8e4a6c744565c7a9ae43925b162be7712e3763",
