@@ -5,6 +5,12 @@ the Windows launcher package adds a fourth number for its own releases.
 
 ## Unreleased: EveJS 261126.2 and a dashboard that keeps up
 
+- **Sovereignty bots stay near home.** They flew 20-25 jumps to the first
+  neutral hub they could find. They now only take hubs within 10 jumps of
+  their corporation's territory (claims, held systems and anchored stations;
+  EVEJS_PLAYER_BOTS_SOV_MAX_HUB_JUMPS to change it), and operations already
+  heading further away turn back.
+
 - **Startup no longer dies on a locked database.** A large world flushes
   several big tables at startup from more than one process, and SQLite's 5 s
   lock wait ran out ("FLUSH_ERROR: database is locked"). The wait is now 30 s

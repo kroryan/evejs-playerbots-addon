@@ -146,3 +146,16 @@ test("a system held by one corporation and claimed by another is contested", () 
   for (const id of [1, 2, 3, 4]) territory.claim(10, id);
   assert.deepEqual(territory.getContested(), { 4: [10, 20] });
 });
+
+test("systems near a corporation's territory are counted in stargate jumps", () => {
+  reset();
+  // Corp 10's only territory is its station system 1.
+  assert.deepEqual([...territory.systemsNearTerritory(10, 2)].sort(), [1, 2, 3, 8]);
+  assert.deepEqual([...territory.systemsNearTerritory(10, 0)], [1]);
+  // A claim widens the reach.
+  territory._testing.reset();
+  assert.equal(territory.claim(10, 2).success, true);
+  assert.equal(territory.systemsNearTerritory(10, 1).has(3), true);
+  // No territory at all: null, so callers measure from the bot instead.
+  assert.equal(territory.systemsNearTerritory(30, 5), null);
+});

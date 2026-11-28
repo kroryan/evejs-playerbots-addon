@@ -15,6 +15,12 @@ const MAX_OPERATION_MS = 45 * 60 * 1000;
 const MAX_TOTAL_OPERATION_MS = 4 * 60 * 60 * 1000;
 const OBJECTIVE_CACHE_MS = 30_000;
 const MAX_NEUTRAL_HUB_SUPPORT_BOTS = 3;
+// Neutral hubs a sovereignty bot will fly to: within this many jumps of its
+// corporation's territory (or of the bot, for a corporation with none yet).
+function maxHubHops() {
+  const value = Math.trunc(Number(process.env.EVEJS_PLAYER_BOTS_SOV_MAX_HUB_JUMPS));
+  return Number.isFinite(value) && value > 0 ? Math.min(value, 63) : 10;
+}
 const objectiveCache = new Map();
 const neutralObjectiveCache = new Map();
 
@@ -174,7 +180,12 @@ function getNeutralHubObjectives(bot, options = {}) {
     .map((operation) => normalizeID(operation.targetID || operation.nodeID))
     .filter(Boolean);
   const space = require("./playerBotSpaceRuntime");
+  const corporationID = normalizeID(character.corporationID || bot.corporationID);
+  const hopLimit = maxHubHops();
+  let nearTerritory = null;
+  try { nearTerritory = require("./playerBotTerritoryClaimsRuntime").systemsNearTerritory(corporationID, hopLimit); } catch (_) { nearTerritory = null; }
   const reachable = candidates
+    .filter((objective) => !nearTerritory || nearTerritory.has(Number(objective.systemID)))
     .map((objective) => {
       const route = space.findStargateRoute(currentSystemID, objective.systemID);
       return { ...objective,
@@ -183,10 +194,11 @@ function getNeutralHubObjectives(bot, options = {}) {
     });
   let claimed = new Set();
   try {
-    const corporationID = normalizeID(character.corporationID || bot.corporationID);
     claimed = new Set((require("./playerBotTerritoryClaimsRuntime").getClaims()[corporationID] || []).map(Number));
   } catch (_) { claimed = new Set(); }
-  return selectNeutralHubObjectives(reachable, activeTargets, claimed);
+  // Without territory to measure from, measure from the bot itself.
+  const inRange = nearTerritory ? reachable : reachable.filter((objective) => objective.hops <= hopLimit);
+  return selectNeutralHubObjectives(inRange, activeTargets, claimed);
 }
 
 function findSovereigntyObjective(bot) {
@@ -278,6 +290,20 @@ async function advanceSovereignty(operation, bot, kit) {
     }
   }
 
+  if (operation.stage === "to-system" && operation.objectiveKind === "neutral-hub" && !operation.withdrawRequested) {
+    // Operations queued before the jump limit existed: drop far-off hubs.
+    let near = null;
+    try {
+      near = require("./playerBotTerritoryClaimsRuntime").systemsNearTerritory(
+        normalizeID(character.corporationID || bot.corporationID), maxHubHops());
+    } catch (_) { near = null; }
+    if (near && !near.has(Number(operation.systemID))) {
+      operation.withdrawRequested = true;
+      operation.stage = "return";
+      kit.record(operation, `Neutral Sovereignty Hub ${operation.targetID} is more than ${maxHubHops()} jumps from the corporation's territory; returning to station.`);
+      kit.save(operation);
+    }
+  }
   if (operation.stage === "to-system") {
     const step = kit.travelToSystem(operation, bot, operation.systemID);
     if (step) return step;
