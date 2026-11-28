@@ -12,6 +12,7 @@ const ENTOSIS_LINK_TYPE_ID = 34593;
 const STRONTIUM_TYPE_ID = 16275;
 const OWNER_SCC = 1000132;
 const MAX_OPERATION_MS = 45 * 60 * 1000;
+const MAX_TOTAL_OPERATION_MS = 4 * 60 * 60 * 1000;
 const OBJECTIVE_CACHE_MS = 30_000;
 const MAX_NEUTRAL_HUB_SUPPORT_BOTS = 3;
 const objectiveCache = new Map();
@@ -246,7 +247,13 @@ function getSovereigntyThreatReason(state) {
 async function advanceSovereignty(operation, bot, kit) {
   const space = kit.space;
   const character = require("../character/characterState").getCharacterRecord(bot.characterID) || {};
-  if (!operation.withdrawRequested && Date.now() - Number(operation.startedAtMs || Date.now()) > MAX_OPERATION_MS) {
+  // The participation limit counts from arrival in the target system, so a
+  // long trip (or a busy scheduler) does not use up the time on the hub. The
+  // whole operation, travel included, still ends after MAX_TOTAL_OPERATION_MS.
+  const participationStartMs = Number(operation.arrivedAtMs || 0);
+  const overParticipation = participationStartMs > 0 && Date.now() - participationStartMs > MAX_OPERATION_MS;
+  const overTotal = Date.now() - Number(operation.startedAtMs || Date.now()) > MAX_TOTAL_OPERATION_MS;
+  if (!operation.withdrawRequested && (overParticipation || overTotal)) {
     operation.withdrawRequested = true;
     if (operation.stage !== "scoring") operation.stage = "return";
     kit.record(operation, "Sovereignty operation reached its participation limit; the Entosis link will finish through the normal module deactivation rules before retreat.");
@@ -276,6 +283,7 @@ async function advanceSovereignty(operation, bot, kit) {
     if (step) return step;
     operation.stage = "node";
     operation.routeTaskID = null;
+    operation.arrivedAtMs = Date.now();
     kit.save(operation);
   }
 

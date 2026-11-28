@@ -5,6 +5,23 @@ the Windows launcher package adds a fourth number for its own releases.
 
 ## Unreleased: EveJS 261126.2 and a dashboard that keeps up
 
+- **Lighter space tick with many pilots in structures.** Each active system
+  rebuilt every Upwell structure's scene entity every second, and counting
+  docked pilots scanned every character for each structure. The tick's
+  structure sync now runs at most every 4 seconds per system (syncs after a
+  state change still run at once), and docked counts come from one scan a
+  second. A profile of a seeded world had these at about 40% of server CPU.
+- **Sovereignty bots get their full time on the hub.** The 45-minute
+  participation limit counted from when the operation was queued, so a long
+  trip or a busy scheduler used it up before the bot arrived and no hub was
+  ever captured. It now counts from arrival; the whole operation still ends
+  after 4 hours.
+- **Bot corporations no longer get "EVEJS <specialty>" names.** Once the
+  sci-fi names run out, new corporations get generated names that fit their
+  specialty, and existing bot-run "EVEJS" corporations (and their seeded
+  alliances) are renamed once at startup.
+- **Star class in the map data**, for the Territory Map's Stars view.
+
 - **Works with EveJS 261126.2** (was 261125.3). Three server files the
   add-on replaces changed upstream (`network/tcp/index.js`,
   `chat/xmppStubServer.js`, `market/marketProxyService.js`) and merged without
