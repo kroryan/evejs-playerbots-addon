@@ -318,8 +318,12 @@ async function ensureNavigationTask(taskID, dueAtMs = null) {
 }
 
 async function ensurePendingNavigationTasks() {
-  const tasks = require("./playerBotTaskRuntime").listTasks({ status: "queued", limit: 100 })
-    .filter((task) => task.kind === "playerbot.space.route");
+  // All queued routes, not just the first 100: after a restart a route left
+  // without a wake-up job would otherwise never move again.
+  const taskRuntime = require("./playerBotTaskRuntime");
+  const tasks = typeof taskRuntime.listQueuedTasksOfKind === "function"
+    ? taskRuntime.listQueuedTasksOfKind("playerbot.space.route")
+    : taskRuntime.listTasks({ status: "queued", limit: 100 }).filter((task) => task.kind === "playerbot.space.route");
   const jobs = await durableScheduler.list({ type: NAVIGATION_JOB_TYPE, states: ["scheduled", "running"] });
   const pending = new Set(jobs
     .filter((job) => job && job.type === NAVIGATION_JOB_TYPE && ["scheduled", "running"].includes(job.state))
@@ -350,11 +354,68 @@ function commanderWaitsForFleet(characterID) {
   }
 }
 
+// A route whose task has not changed (no jump, no undock, no lease) for this
+// long is stuck: the navigation step below re-queues itself silently whenever
+// the pilot looks busy (a pending interruption, another task, a local-defense
+// lease or no provider), and nothing else ever ends the route. Stop the
+// pilot's operation, as the dashboard's Stop does, so the director can give
+// it new work, and log why the route could not move.
+const ROUTE_STALL_MS = 60 * 60 * 1000;
+
+function routeStallBlockers(characterID) {
+  const id = Number(characterID);
+  const blockers = [];
+  try {
+    const interruptions = require("./playerBotInterruptRuntime");
+    if (interruptions.hasPending(id)) blockers.push(`pending interruption ${interruptions.pending(id)?.pending?.kind || ""}`.trim());
+    if (interruptions.isBusy(id)) blockers.push("interruption in progress");
+  } catch (_) { /* unavailable */ }
+  try { if (require("./playerBotLocalDefenseAdapter").hasLease(id)) blockers.push("local-defense lease"); } catch (_) { /* unavailable */ }
+  try {
+    const bot = getPlayerBotRuntime().getBotByCharacterID(id);
+    if (!bot) blockers.push("pilot not in roster");
+    else {
+      if (bot.currentTask) blockers.push(`busy with task ${bot.currentTask}`);
+      if (bot.status === "paused" || bot.autonomyPaused === true) blockers.push("paused");
+    }
+  } catch (_) { /* unavailable */ }
+  return blockers.length ? blockers.join(", ") : "none found";
+}
+
+function releaseStalledRoute(task) {
+  const updatedAtMs = Date.parse(task && (task.updatedAt || task.createdAt) || "");
+  if (!task || task.kind !== "playerbot.space.route" || task.status !== "queued" ||
+      !Number.isFinite(updatedAtMs) || Date.now() - updatedAtMs < ROUTE_STALL_MS) return null;
+  const characterID = Number(task.resourceOwnerCharacterID) || 0;
+  const minutes = Math.round((Date.now() - updatedAtMs) / 60000);
+  const blockers = routeStallBlockers(characterID);
+  const bot = characterID ? getPlayerBotRuntime().getBotByCharacterID(characterID) : null;
+  let stopped = null;
+  try {
+    const operation = bot ? require("./playerBotOperationRuntime").getOperation(characterID) : null;
+    if (operation && String(operation.routeTaskID || "").toUpperCase() === String(task.taskID).toUpperCase()) {
+      stopped = require("./playerBotOperationRuntime").stopOperation(bot.characterName);
+    }
+  } catch (error) {
+    stopped = { success: false, message: error.message };
+  }
+  const tasks = require("./playerBotTaskRuntime");
+  if (tasks.getTask(task.taskID)?.status === "queued") tasks.cancelTask(task.taskID);
+  require("../../utils/logger").warn(
+    `[PlayerBots] Route ${task.taskID} char=${characterID} made no progress for ${minutes} min ` +
+      `(stage ${task.progress && task.progress.stage || "none"}; blockers: ${blockers}); ` +
+      `${stopped ? `stopped its operation: ${String(stopped.message || "").slice(0, 120)}` : "cancelled the route"}.`,
+  );
+  return { processed: true, stalled: true, taskID: task.taskID, blockers };
+}
+
 async function handleNavigationJob(job = {}) {
   const taskID = String(job && job.payload && job.payload.taskID || "").trim().toUpperCase();
   if (!taskID) return { processed: false, reason: "missing-task-id" };
   const tasks = require("./playerBotTaskRuntime");
   const queuedTask = tasks.getTask(taskID);
+  const stalled = releaseStalledRoute(queuedTask);
+  if (stalled) return stalled;
   const interruptions = require("./playerBotInterruptRuntime");
   if (queuedTask && (interruptions.isBusy(queuedTask.resourceOwnerCharacterID) || interruptions.hasPending(queuedTask.resourceOwnerCharacterID))) {
     await scheduleNavigationTask(taskID, Date.now() + 1000);
@@ -1572,6 +1633,7 @@ module.exports = {
   ensureNavigationTask,
   ensurePendingIndustryCycles,
   ensurePendingNavigationTasks,
+  _routeStall: { releaseStalledRoute, ROUTE_STALL_MS },
   formatAutonomyStatus,
   handleIndustryCycleJob: measuredJobHandler(handleIndustryCycleJob),
   handleDirectorThinkJob: measuredJobHandler(handleDirectorThinkJob),
