@@ -988,6 +988,32 @@ function renameLegacyBotCorporations() {
   return renamed;
 }
 
+// Bots never relinquish roles on their own (a player would before quitting), so a
+// non-CEO bot in a bot-run corporation drops its roles and titles when it accepts
+// an invitation elsewhere. Corporations run by players keep their role control.
+function releaseBotCorporationRoles(corporationID, characterID) {
+  const runtimeState = require("../corporation/corporationRuntimeState");
+  const corporation = getCorporationRecord(corporationID);
+  const ceoID = Number(corporation?.ceoID || 0);
+  if (!ceoID || ceoID === characterID || !repo.read(TABLE, `/${ceoID}`).success) return false;
+  const member = runtimeState.getCorporationMember(corporationID, characterID);
+  if (!member) return false;
+  const fields = ["roles", "grantableRoles", "rolesAtHQ", "grantableRolesAtHQ", "rolesAtBase",
+    "grantableRolesAtBase", "rolesAtOther", "grantableRolesAtOther"];
+  const held = fields.some((field) => String(member[field] ?? "0") !== "0") || Number(member.titleMask || 0) !== 0;
+  if (!held) return false;
+  runtimeState.updateCorporationRuntime(corporationID, (runtime) => {
+    const row = runtime.members?.[String(characterID)];
+    if (row) {
+      for (const field of fields) row[field] = "0";
+      row.titleMask = 0;
+    }
+    return runtime;
+  });
+  runtimeState.syncMemberStateToCharacterRecord(corporationID, characterID);
+  return true;
+}
+
 function acceptBotCorporationInvitation(service, session, bot, targetCorporationID, resetTask = false) {
   const { isNpcCorporationID } = require("../corporation/corporationState");
   const { getCorporationRuntime } = require("../corporation/corporationRuntimeState");
@@ -1011,8 +1037,17 @@ function acceptBotCorporationInvitation(service, session, bot, targetCorporation
     }
     const botSession = createBotSession(bot);
     if (!isNpcCorporationID(character.corporationID)) {
+      releaseBotCorporationRoles(Number(character.corporationID), characterID);
       const [canLeave, reason] = service.Handle_CanLeaveCurrentCorporation([], botSession);
-      if (!canLeave) return { success: false, ineligible: true, message: reason || "The bot cannot leave its corporation." };
+      if (!canLeave) {
+        const source = getCorporationRecord(Number(character.corporationID));
+        const message = reason === "CrpCEOCanNotQuit"
+          ? `${bot.characterName} is the CEO of ${source?.corporationName || "its corporation"} and cannot leave it.`
+          : reason === "CrpCantQuitNotInStasis"
+            ? `${bot.characterName} still holds roles in ${source?.corporationName || "its corporation"}, which is not bot-run, so the roles must be removed there first.`
+            : reason || "The bot cannot leave its corporation.";
+        return { success: false, ineligible: true, message };
+      }
     }
 
     const runtime = getCorporationRuntime(targetCorporationID) || {};
@@ -1127,6 +1162,7 @@ function invitePlayerToBotFleet(session, botQuery) {
 
 module.exports = {
   renameLegacyBotCorporations,
+  releaseBotCorporationRoles,
   removeBotRecord,
   DEFAULT_TARGET,
   getConfiguredTarget,
