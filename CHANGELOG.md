@@ -5,6 +5,12 @@ the Windows launcher package adds a fourth number for its own releases.
 
 ## Unreleased: EveJS 261126.2 and a dashboard that keeps up
 
+- **Startup no longer dies on a locked database.** A large world flushes
+  several big tables at startup from more than one process, and SQLite's 5 s
+  lock wait ran out ("FLUSH_ERROR: database is locked"). The wait is now 30 s
+  (EVEJS_GAMESTORE_BUSY_TIMEOUT_MS to change it).
+- **The per-second structure tick runs at most every 2 seconds.**
+
 - **Lighter space tick with many pilots in structures.** Each active system
   rebuilt every Upwell structure's scene entity every second, and counting
   docked pilots scanned every character for each structure. The tick's

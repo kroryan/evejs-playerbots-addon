@@ -233,8 +233,8 @@
     "server/src/gameStore/sqliteStore.js": {
       "baseSha256": "8effb62030e1739816f963c750eac8364f4597803b1d8c60409e7e171f272918",
       "subsystem": "gamestore",
-      "sourceSha256": "8a5deadc641f20c8121d0bc1ccfce873513ada7182fe736e88e5d04f98f22286",
-      "overlaySha256": "8a5deadc641f20c8121d0bc1ccfce873513ada7182fe736e88e5d04f98f22286"
+      "sourceSha256": "da9643069e1499368774fef60207aae76ebef9b6cfc6ac8dcbe245fb31ad8f31",
+      "overlaySha256": "da9643069e1499368774fef60207aae76ebef9b6cfc6ac8dcbe245fb31ad8f31"
     },
     "server/src/gameStore/tableOwnership.js": {
       "baseSha256": "4786d8ca944dd3d3b7ed58604c15df72378e7cd1e22c40f801a25d1a49243f60",
