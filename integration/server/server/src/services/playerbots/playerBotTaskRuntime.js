@@ -163,6 +163,14 @@ function enqueueTask(options = {}) {
   return enqueueTasks([options])[0];
 }
 
+// Every queued task of one kind, without listTasks' 100-row page limit.
+function listQueuedTasksOfKind(kind) {
+  const normalized = normalizeTaskKind(kind);
+  return Object.values(readQueue().tasks)
+    .filter((task) => task && task.status === "queued" && task.kind === normalized)
+    .map(cloneTask);
+}
+
 function listTasks(options = {}) {
   const status = String(options.status || "").trim().toLowerCase();
   const limit = Math.max(1, Math.min(100, Math.trunc(Number(options.limit) || 25)));
@@ -721,6 +729,7 @@ function requestExtractorMaintenanceBatch(bots = []) {
 }
 
 module.exports = {
+  listQueuedTasksOfKind,
   hasBlockingLease(characterID) {
     return Object.values(readQueue().tasks).some(task => task?.status === "leased" &&
       Number(task.providerCharacterID) === Number(characterID) && task.kind !== "playerbot.space.route");
