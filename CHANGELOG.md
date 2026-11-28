@@ -15,6 +15,9 @@ the Windows launcher package adds a fourth number for its own releases.
   several big tables at startup from more than one process, and SQLite's 5 s
   lock wait ran out ("FLUSH_ERROR: database is locked"). The wait is now 30 s
   (EVEJS_GAMESTORE_BUSY_TIMEOUT_MS to change it).
+  Startup also waits up to 30 s (was 10 s) for the scheduler process to
+  answer while thousands of jobs are queued at once
+  (EVEJS_SCHEDULER_REQUEST_TIMEOUT_MS).
 - **The per-second structure tick runs at most every 2 seconds.**
 
 - **Lighter space tick with many pilots in structures.** Each active system

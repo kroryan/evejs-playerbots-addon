@@ -243,7 +243,11 @@ function createDurableScheduler(options = {}) {
     workerPath: path.join(__dirname, "durableSchedulerProcess.worker.js"),
     env: childEnvironment,
     maxPending: options.maxPending || 256,
-    requestTimeoutMs: options.requestTimeoutMs || 10_000,
+    // Playerbots add-on: at startup a large world queues thousands of jobs at
+    // once and a 10 s answer from the scheduler process was not always enough
+    // (the server stopped with "Authority scheduler command ... timed out").
+    requestTimeoutMs: options.requestTimeoutMs ||
+      positiveInteger(process.env.EVEJS_SCHEDULER_REQUEST_TIMEOUT_MS, 30_000),
     startupTimeoutMs: positiveInteger(
       options.startupTimeoutMs,
       defaultStartupTimeoutMs,
