@@ -5,6 +5,10 @@ the Windows launcher package adds a fourth number for its own releases.
 
 ## Unreleased: EveJS 261126.2 and a dashboard that keeps up
 
+- **Trade routes carry their stargate path.** The map intel's routes include
+  the systems bots fly through (the same route their navigation plans), so
+  the Territory Map draws the real path instead of a straight line.
+
 - **Sovereignty bots stay near home.** They flew 20-25 jumps to the first
   neutral hub they could find. They now only take hubs within 10 jumps of
   their corporation's territory (claims, held systems and anchored stations;

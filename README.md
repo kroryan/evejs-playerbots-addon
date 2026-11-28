@@ -429,11 +429,14 @@ and so on; see [Roster and population](GUIDE.md#roster-and-population)).
   station they have anchored there: up to five open claims, each a stargate
   jump from their station or a system they claim or hold. Each claimed
   system gets a neutral Sovereignty Hub; sovereignty pilots prefer their
-  corporation's claims, and a captured system frees the claim for the next.
+  corporation's claims, only take hubs within 10 jumps of its territory
+  (`EVEJS_PLAYER_BOTS_SOV_MAX_HUB_JUMPS`), and a captured system frees the
+  claim for the next.
   Bot corporations claim on their own; corporations claiming one system, or
   claiming a system another holds, go to war over it.
 - **Map API.** The private API serves the starmap, live bots and
-  sovereignty, claims, an intel report (trade routes, mining, combat, kills,
+  sovereignty, claims, star classes, an intel report (trade routes with the
+  stargate path bots fly, mining, combat, kills,
   wars, structures and one corporation's threats) and orders that send a
   corporation's bots to mine or defend a system. The
   [Territory Map add-on](https://github.com/ubermidas/evejs-territory-map)
