@@ -61,3 +61,19 @@ test("docked pilot counts come from one character scan per second", () => {
   assert.equal(scans, 2);
   throttle._testing.reset();
 });
+
+test("the per-second structure tick runs at most once per interval", () => {
+  let now = 5_000;
+  let passes = 0;
+  const structureState = { getStructureByID: () => null, tickStructures: () => { passes += 1; } };
+  throttle._testing.reset();
+  throttle.install({ structureState, now: () => now, sceneProto: { syncStructureEntitiesFromState() {} } });
+  structureState.tickStructures(now);
+  now += 1_000;
+  structureState.tickStructures(now);
+  assert.equal(passes, 1);
+  now += throttle.MIN_TICK_INTERVAL_MS;
+  structureState.tickStructures(now);
+  assert.equal(passes, 2);
+  throttle._testing.reset();
+});

@@ -42,6 +42,19 @@ function install(options = {}) {
     return original.call(this, structureID, { ...(readOptions || {}), refresh });
   };
   installDockedCountCache(structureState, now, options.readCharacters);
+  // The space runtime calls tickStructures() every second; the structure
+  // clock (fuel, timers, service modules) gains nothing from more than one
+  // pass per MIN_TICK_INTERVAL_MS, and each pass walks every structure.
+  if (typeof structureState.tickStructures === "function") {
+    const originalTick = structureState.tickStructures;
+    let lastPassAtMs = 0;
+    structureState.tickStructures = function throttledTickStructures(...args) {
+      const at = now();
+      if (at - lastPassAtMs < MIN_TICK_INTERVAL_MS) return undefined;
+      lastPassAtMs = at;
+      return originalTick.apply(this, args);
+    };
+  }
   installed = true;
   installSceneSyncThrottle(options);
   return true;

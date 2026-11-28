@@ -935,8 +935,8 @@
     "server/src/services/playerbots/playerBotStructureReadThrottle.js": {
       "baseSha256": null,
       "subsystem": "playerbots-core",
-      "sourceSha256": "fb8c07eb6efc1411d1cb98dbf0f2e1bf907169d97085a1f9e22b65b619323361",
-      "overlaySha256": "fb8c07eb6efc1411d1cb98dbf0f2e1bf907169d97085a1f9e22b65b619323361"
+      "sourceSha256": "30d12e4421b747bc7acffc76567aef0f4e69b16e7a8d0a288407b2d2e9fa1ae7",
+      "overlaySha256": "30d12e4421b747bc7acffc76567aef0f4e69b16e7a8d0a288407b2d2e9fa1ae7"
     },
     "server/src/services/playerbots/playerBotStructureRuntime.js": {
       "baseSha256": null,
